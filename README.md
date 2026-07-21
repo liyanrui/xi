@@ -47,7 +47,7 @@ $ sudo install xi /usr/local/bin
 
 假设有以下文学程序 hello.xi：
 
-```c
+<pre>
 经典的 C 语言入门程序：
 
 @ hello world # [C]
@@ -56,13 +56,9 @@ int main(void) {
         printf("hello world!\n");
         return 0;
 }
-@
-
-假设上述代码保存在 hello.c 文件，可使用以下命令编译该文件，获得程序 hello：
-
-<pre>
-$ gcc hello.c -o hello
 </pre>
+
+假设上述代码保存在 hello.c 文件……
 ```
 
 使用以下命令可从 foo.xi 中提取名字为「hello world」代码片段里的全部代码：
@@ -110,11 +106,7 @@ int main(void) {
 }
 ```
 
-假设上述代码保存在 hello.c 文件，可使用以下命令编译该文件，获得程序 hello：
-
-<pre>
-$ gcc hello.c -o hello
-</pre>
+假设上述代码保存在 hello.c 文件……
 </pre>
 
 # 配置文件
