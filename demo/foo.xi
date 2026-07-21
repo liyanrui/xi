@@ -1,15 +1,20 @@
-经典的 C 语言入门程序：
+C 语言的 hello world 程序可以像下面这样逐步写出来。首先，需要包含标准库中的标准输入输出头文件：
 
 @ hello world # [C]
 #include <stdio.h>
+@
+
+然后，编写程序的入口函数：
+
+@ hello world # +
 int main(void) {
-        printf("hello world!\n");
+        # 在屏幕上打印 Hello world! @
         return 0;
 }
 @
 
-假设上述代码保存在 hello.c 文件，可使用以下命令编译该文件，获得程序 hello：
+最后，调用标准库的 `printf` 函数在屏幕上打印字符串 `"Hello world!"`：
 
-<pre>
-$ gcc hello.c -o hello
-</pre>
+@ 在屏幕上打印 Hello world! #
+printf("Hello world!\n");
+@

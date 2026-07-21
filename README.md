@@ -47,18 +47,27 @@ $ sudo install xi /usr/local/bin
 
 假设有以下文学程序 hello.xi：
 
-<pre>
-经典的 C 语言入门程序：
+```
+C 语言的 hello world 程序可以像下面这样逐步写出来。首先，需要包含标准库中的标准输入输出头文件：
 
 @ hello world # [C]
 #include <stdio.h>
+@
+
+然后，编写程序的入口函数：
+
+@ hello world # +
 int main(void) {
-        printf("hello world!\n");
+        # 在屏幕上打印 Hello world! @
         return 0;
 }
-</pre>
+@
 
-假设上述代码保存在 hello.c 文件……
+最后，调用标准库的 `printf` 函数在屏幕上打印字符串 `"Hello world!"`：
+
+@ 在屏幕上打印 Hello world! #
+printf("Hello world!\n");
+@
 ```
 
 使用以下命令可从 foo.xi 中提取名字为「hello world」代码片段里的全部代码：
@@ -88,26 +97,44 @@ $ xi -w -c markdown.conf -o foo.md foo.xi
 markdown.conf 文件可以放在 foo.xi 所在目录，其内容为
 
 ```yaml
-snippet_start: ```${language}
-snippet_stop: ```
+snippet_start: <pre>
+snippet_stop: </pre>
+snippet_name: "\n<span class=\"snippet-name\" id=\"#xi-${id}\">@${name}#</span> "
+snippet_reference: "<span class=\"snippet-reference\">#${name}@</span>"
+snippet_reference_id: "<span class=\"snippet-id\"><a href=\"#xi-${id}\">[${id}]</a></span>"
+snippet_emission: "<span class=\"snippet-emission\">=> ${name}</span>
+                   <span class=\"snippet-id\">
+                      <a href=\"#xi-${id}\">[${id}]</a>
+                   </span>"
 ```
 
 上述命令生成的 foo.md 的内容如下：
 
-<pre>
-经典的 C 语言入门程序：
+```markdown
+C 语言的 hello world 程序可以像下面这样逐步写出来。首先，需要包含标准库中的标准输入输出头文件：
 
-```C
-@ hello world #
+<pre>
+<span class="snippet-name" id="#xi-1">@ hello world #</span>
 #include <stdio.h>
+</pre>
+
+然后，编写程序的入口函数：
+
+<pre>
+<span class="snippet-name" id="#xi-2">@ hello world #</span> +
 int main(void) {
-        printf("hello world!\n");
+        <span class="snippet-reference"># 在屏幕上打印 Hello world! @</span><span class="snippet-id"><a href="#xi-3">[3]</a></span>
         return 0;
 }
-```
-
-假设上述代码保存在 hello.c 文件……
 </pre>
+
+最后，调用标准库的 `printf` 函数在屏幕上打印字符串 `"Hello world!"`：
+
+<pre>
+<span class="snippet-name" id="#xi-3">@ 在屏幕上打印 Hello world! #</span>
+printf("Hello world!\n");
+<span class="snippet-emission">=>  hello world </span><span class="snippet-id"><a href="#xi-2">[2]</a></span></pre>
+```
 
 # 配置文件
 
