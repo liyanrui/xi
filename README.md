@@ -143,7 +143,8 @@ printf("Hello world!\n");
 ```yaml
 snippet_start: \start${language}
 snippet_stop: \stop${language}
-snippet_name: "\n/BTEX\color[darkred]{@${name}\#}\reference[xi-${id}]{${id}}\inoutermargin{\darkred{${id}}}/ETEX"
+snippet_name: "\n/BTEX\color[darkred]{@${name}\#}
+               \reference[xi-${id}]{${id}}\inoutermargin{\darkred{${id}}}/ETEX"
 snippet_tag: "\n/BTEX\color[darkmagenta]{<${name}>}/ETEX"
 snippet_tag_reference: "/BTEX\color[darkmagenta]{\ <${name}>\ }/ETEX"
 snippet_reference: "/BTEX\color[darkcyan]{\tt \#${name}@}/ETEX"
