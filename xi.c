@@ -1,5 +1,5 @@
 #include <stdint.h> /* for SIZE_MAX */
-/* 该头文件已包含 wk-str.h, wk-list.h, wk-table.h 等头文件 */
+/* 该头文件已包含 wk-str.h, wk-array.h, wk-list.h, wk-table.h 等 */
 #include <wk-cfg.h>
 #include <wk-tree.h>
 #include <wk-cli.h>
@@ -8,14 +8,14 @@ WKArray *skipped_chars_in_snippet_name;
 typedef enum {
         XI_SNIPPET_DELIMITER, /* 文档或有名片段界限符 */
         XI_SNIPPET_NAME_DELIMITER, /* 片段名字界限符 */
-        XI_LANGUAGE_BEGINNING_MARK, /* 语言标记开始符 */
-        XI_LANGUAGE_END_MARK, /* 语言标记终结符 */
+        XI_LANGUAGE_START_MARK, /* 语言标记开始符 */
+        XI_LANGUAGE_STOP_MARK, /* 语言标记终结符 */
         XI_SNIPPET_APPENDING_MARK, /* 后向合并运算符 */
         XI_SNIPPET_PREPENDING_MARK, /*前向合并运算符 */
-        XI_TAG_BEGINNING_MARK, /* 有名片段标签开始符 */
-        XI_TAG_END_MARK, /* 有名片段标签终结符 */
-        XI_SNIPPET_REFERENCE_BEGINNING_MARK, /* 有名片段引用开始符 */
-        XI_SNIPPET_REFERENCE_END_MARK, /* 有名片段引用终结符 */
+        XI_TAG_START_MARK, /* 有名片段标签开始符 */
+        XI_TAG_STOP_MARK, /* 有名片段标签终结符 */
+        XI_SNIPPET_REFERENCE_START_MARK, /* 有名片段引用开始符 */
+        XI_SNIPPET_REFERENCE_STOP_MARK, /* 有名片段引用终结符 */
         XI_TEXT /* 普通文本 */
 } XITokenType;
 typedef struct {
@@ -27,14 +27,14 @@ typedef struct {
         WKStr *snippet_delimiter;
         WKStr *snippet_name_delimiter;
         WKStr *snippet_name_continuation;
-        WKStr *language_beginning_mark;
-        WKStr *language_end_mark;
+        WKStr *language_start_mark;
+        WKStr *language_stop_mark;
         WKStr *snippet_appending_mark;
         WKStr *snippet_prepending_mark;
-        WKStr *tag_beginning_mark;
-        WKStr *tag_end_mark;
-        WKStr *snippet_reference_beginning_mark;
-        WKStr *snippet_reference_end_mark;
+        WKStr *tag_start_mark;
+        WKStr *tag_stop_mark;
+        WKStr *snippet_reference_start_mark;
+        WKStr *snippet_reference_stop_mark;
 } XISymbols;
 #define XI_USER_CONFIG(user_config, xi_symbols, item) do { \
         WKBox *v = wk_table_query(user_config, wk_box_ref(#item, const char *)); \
@@ -46,11 +46,17 @@ typedef struct {
 typedef struct {
         WKStr *snippet_start;
         WKStr *snippet_stop;
+        WKStr *snippet_name_start;
         WKStr *snippet_name;
+        WKStr *snippet_id;
+        WKStr *snippet_name_continuation;
+        WKStr *snippet_name_stop;
         WKStr *snippet_tag;
         WKStr *snippet_tag_reference;
+        WKStr *snippet_reference_start;
         WKStr *snippet_reference;
         WKStr *snippet_reference_id;
+        WKStr *snippet_reference_stop;
         WKStr *snippet_emission;
         WKStr *snippet_appending_operator;
         WKStr *snippet_prepending_operator;
@@ -85,7 +91,7 @@ static const char *xi_advance(const char *a,
 static bool tail_is_snippet_delimiter(WKStr *cache,
                                       WKStr *snippet_delimiter) {
         if (snippet_delimiter->n > cache->n) return false;
-	/* 令 p 指向缓冲区末尾 snippet_delimiter->n 个字节之首 */
+        /* 令 p 指向缓冲区末尾 snippet_delimiter->n 个字节之首 */
         const char *p = cache->body + cache->n - snippet_delimiter->n;
         if (strcmp(p, snippet_delimiter->body) != 0) return false;
         if (p == cache->body) return true;
@@ -129,8 +135,11 @@ static void add_snippet_delimiter(WKList *tokens, WKStr *snippet_delimiter) {
         snippet->content = wk_str(snippet_delimiter->body);
         wk_list_suffix(tokens, snippet, XIToken *);
 }
-static bool here_is_me(const char *a, const char *b,
-                       const char *c, int dir, WKStr *me) {
+static bool here_is_me(const char *a,
+                       const char *b,
+                       const char *c,
+                       int dir,
+                       WKStr *me) {
         size_t n = me->n;
         const char *p = dir < 0 ? (c - n + 1) : c;
         if (p < a) return false;
@@ -140,7 +149,7 @@ static bool here_is_me(const char *a, const char *b,
 static const char *find_name_delimiter(XIToken *t,
                                        WKStr *delimiter,
                                        WKStr *continuation) {
-        /* 构造字符串区间 [a, b] */
+        /* 构造字符串区间 [a, b) */
         const char *a = t->content->body;
         if (*a == '\n') return NULL;
         /* b 为 NULL 或指向片段名字界限符首字节 */
@@ -149,7 +158,7 @@ static const char *find_name_delimiter(XIToken *t,
         /* 检测 [a, b) 是否含有合法的片段名字界限符 */
         const char *p = b;
         enum {IDLE, LINEBREAK, SUCCESS, FAILURE} state = IDLE;
-        while (1) { /* 逆序遍历 [a, b - 1] */
+        while (1) { /* 逆序遍历 [a, b) */
                 p = xi_advance(a, b, p, -1);
                 if (p == a) {
                         state = SUCCESS;
@@ -173,34 +182,34 @@ static const char *find_name_delimiter(XIToken *t,
         return (state == SUCCESS) ? b : NULL;
 }
 static WKStr *extract_block_at_head(XIToken *t,
-					  WKStr *beginning_mark,
-					  WKStr *end_mark)
+					  WKStr *start_mark,
+					  WKStr *stop_mark)
 {
         WKStr *result = NULL;
-        const char *block_beginning = NULL;
-        const char *block_end = NULL;
+        const char *block_start = NULL;
+        const char *block_stop = NULL;
         size_t new_line_number = t->line_number;
         const char *a = t->content->body;
         const char *b = a + t->content->n;
         const char *p = a;
-        size_t m = beginning_mark->n;
-        size_t n = end_mark->n;
+        size_t m = start_mark->n;
+        size_t n = stop_mark->n;
         enum {IDLE, MAYBE_MARK, FAILURE, SUCCESS} state = IDLE;
         while (1) { /* 正序遍历 [a, b - 1] */
                 p = xi_advance(a, b, p, 1);
                 switch (state) {
                 case IDLE:
                         if (*p == '\n') new_line_number++;
-                        else if (here_is_me(a, b, p, 1, beginning_mark)) {
-				block_beginning = p;
+                        else if (here_is_me(a, b, p, 1, start_mark)) {
+				block_start = p;
 				p += (m - 1);
                                 state = MAYBE_MARK;
                         } else state = FAILURE;
                         break;
                 case MAYBE_MARK:
-                        if (here_is_me(a, b, p, 1, end_mark)) {
+                        if (here_is_me(a, b, p, 1, stop_mark)) {
 				p += (n - 1);
-                                block_end = p + 1;
+                                block_stop = p + 1;
                                 state = SUCCESS;
                         } else state = MAYBE_MARK;
                         break;
@@ -209,13 +218,13 @@ static WKStr *extract_block_at_head(XIToken *t,
                 }
                 if (state == SUCCESS) { /* 从记号内容里消除块标记 */
                         result = wk_str(NULL);
-                        const char *head = block_beginning + m;
-                        const char *tail = block_end - n;
+                        const char *head = block_start + m;
+                        const char *tail = block_stop - n;
                         for (const char *q = head; q != tail; q++) {
                                 wk_str_suffix_char(result, *q);
                         }
                         WKStr *new_content = wk_str(NULL);
-                        for (const char *q = block_end; *q != '\0'; q++) {
+                        for (const char *q = block_stop; *q != '\0'; q++) {
                                 wk_str_suffix_char(new_content, *q);
                         }
                         wk_str_free(t->content);
@@ -231,18 +240,18 @@ static WKStr *extract_block_at_head(XIToken *t,
 static void add_block(WKList *tokens,
                       WKLink *x,
                       WKStr *block,
-                      WKStr *beginning_mark,
-                      XITokenType beginning_mark_type,
-                      WKStr *end_mark,
-                      XITokenType end_mark_type)
+                      WKStr *start_mark,
+                      XITokenType start_mark_type,
+                      WKStr *stop_mark,
+                      XITokenType stop_mark_type)
 {
         XIToken *t = wk_link_get(x, XIToken *);
         /* 构建块起始记号 */
-        XIToken *beginning = malloc(sizeof(XIToken));
-        beginning->type = beginning_mark_type;
-        beginning->line_number = t->line_number;
-        beginning->content = wk_str(beginning_mark->body);
-        WK_LIST_INSF(tokens, x, &beginning);
+        XIToken *start = malloc(sizeof(XIToken));
+        start->type = start_mark_type;
+        start->line_number = t->line_number;
+        start->content = wk_str(start_mark->body);
+        WK_LIST_INSF(tokens, x, &start);
         /* 构建块内容记号 */
         XIToken *body = malloc(sizeof(XIToken));
         body->type = XI_TEXT;
@@ -250,11 +259,11 @@ static void add_block(WKList *tokens,
         body->content = block;
         WK_LIST_INSF(tokens, x, &body);
         /* 构建块终止记号 */
-        XIToken *end = malloc(sizeof(XIToken));
-        end->type = end_mark_type;
-        end->line_number = t->line_number;
-        end->content = wk_str(end_mark->body);
-        WK_LIST_INSF(tokens, x, &end);
+        XIToken *stop = malloc(sizeof(XIToken));
+        stop->type = stop_mark_type;
+        stop->line_number = t->line_number;
+        stop->content = wk_str(stop_mark->body);
+        WK_LIST_INSF(tokens, x, &stop);
 }
 static WKStr *extract_operator(XIToken *t, WKStr *operator) {
         /* 构造字符串区间 [a, b) */
@@ -298,20 +307,20 @@ static void add_operator(WKList *tokens,
         WK_LIST_INSF(tokens, x, &a);
 }
 static WKPair *find_snippet_reference(WKStr *content,
-                                      WKStr *reference_beginning_mark,
-                                      WKStr *reference_end_mark,
+                                      WKStr *reference_start_mark,
+                                      WKStr *reference_stop_mark,
                                       WKStr *continuation)
 {
         const char *a = content->body, *begin = NULL, *end = NULL;
         enum {IDLE, MAYBE_LINEBREAK, FAILURE} state;
         while (1) {
-                begin = strstr(a, reference_beginning_mark->body);
+                begin = strstr(a, reference_start_mark->body);
                 if (!begin) return NULL;
-                end = strstr(a, reference_end_mark->body);
+                end = strstr(a, reference_stop_mark->body);
                 if (!end || begin >= end) return NULL;
                 /*区间 [c, p) 是片段名 */
                 const char *p = end;
-                const char *c = begin + reference_beginning_mark->n;
+                const char *c = begin + reference_start_mark->n;
                 /* 逆序遍历 [c, end)，校验片段名是否合法 */
                 bool legal = true;
                 state = IDLE;
@@ -341,7 +350,7 @@ static WKPair *find_snippet_reference(WKStr *content,
         }
         if (begin && end) {
                 WKPair *result = wk_pair(wk_box(begin, const char *),
-                                         wk_box(end + reference_end_mark->n, const char *));
+                                         wk_box(end + reference_stop_mark->n, const char *));
                 return result;
         } else return NULL;
 }
@@ -349,16 +358,16 @@ static void split_snippet(WKList *tokens,
                           WKLink *x,
                           WKPair *snippet_reference,
                           WKStr *snippet_name_continuation,
-                          WKStr *snippet_reference_beginning_mark,
-                          WKStr *snippet_reference_end_mark)
+                          WKStr *snippet_reference_start_mark,
+                          WKStr *snippet_reference_stop_mark)
 {
         XIToken *t = wk_link_get(x, XIToken *);
         size_t line_number = t->line_number;
-        const char *ref_beginning = wk_box_get(snippet_reference->x, const char *);
-        const char *ref_end = wk_box_get(snippet_reference->y, const char *);
+        const char *ref_start = wk_box_get(snippet_reference->x, const char *);
+        const char *ref_stop = wk_box_get(snippet_reference->y, const char *);
         /* 片段引用之前的内容 */
         WKStr *a = wk_str(NULL);
-        for (const char *p = t->content->body; p != ref_beginning; p++) {
+        for (const char *p = t->content->body; p != ref_start; p++) {
                 wk_str_suffix_char(a, *p);
                 if (*p == '\n') line_number++;
         }
@@ -367,15 +376,15 @@ static void split_snippet(WKList *tokens,
         t_a->line_number = t->line_number;
         t_a->content = a;
         /* 片段引用起始标记 */
-        WKStr *b = wk_str(snippet_reference_beginning_mark->body);
+        WKStr *b = wk_str(snippet_reference_start_mark->body);
         XIToken *t_b = malloc(sizeof(XIToken));
-        t_b->type = XI_SNIPPET_REFERENCE_BEGINNING_MARK;
+        t_b->type = XI_SNIPPET_REFERENCE_START_MARK;
         t_b->line_number = line_number;
         t_b->content = b;
         /* 片段名称 */
         WKStr *c = wk_str(NULL);
-        const char *left = ref_beginning + snippet_reference_beginning_mark->n;
-        const char *right = ref_end - snippet_reference_end_mark->n;
+        const char *left = ref_start + snippet_reference_start_mark->n;
+        const char *right = ref_stop - snippet_reference_stop_mark->n;
         for (const char *p = left; p != right; p++) {
                 wk_str_suffix_char(c, *p);
                 if (*p == '\n') line_number++;
@@ -385,15 +394,15 @@ static void split_snippet(WKList *tokens,
         t_c->line_number = t_b->line_number;
         t_c->content = c;
         /* 片段引用结束标记 */
-        WKStr *d = wk_str(snippet_reference_end_mark->body);
+        WKStr *d = wk_str(snippet_reference_stop_mark->body);
         XIToken *t_d = malloc(sizeof(XIToken));
-        t_d->type = XI_SNIPPET_REFERENCE_END_MARK;
+        t_d->type = XI_SNIPPET_REFERENCE_STOP_MARK;
         t_d->line_number = line_number;
         t_d->content = d;
         /* 片段引用之后的内容 */
         WKStr *e = wk_str(NULL);
         bool after_reference = true;
-        for (const char *p = ref_end; *p != '\0'; p++) {
+        for (const char *p = ref_stop; *p != '\0'; p++) {
                 if (after_reference) {
                          /* 忽略与片段引用之后与片段引用终止符同一行的文本 */
                         if (*p == '\n') {
@@ -461,7 +470,6 @@ static WKList *xi_lexer(FILE *src_file, XISymbols *xi_symbols) {
                                         wk_str_suffix_char(cache, *q);
                                 }
                                 snippet_name->content = cache;
-                                
                                 /* 构建片段名字界限符记号 */
                                 XIToken *snippet_name_delimiter = malloc(sizeof(XIToken));
                                 snippet_name_delimiter->type = XI_SNIPPET_NAME_DELIMITER;
@@ -470,7 +478,6 @@ static WKList *xi_lexer(FILE *src_file, XISymbols *xi_symbols) {
                                         if (*q == '\n') snippet_name_delimiter->line_number++;
                                 }
                                 snippet_name_delimiter->content = wk_str(xi_symbols->snippet_name_delimiter->body);
-                                
                                 /* 构建片段内容记号 */
                                 XIToken *snippet = malloc(sizeof(XIToken));
                                 snippet->type = XI_TEXT;
@@ -505,16 +512,16 @@ static WKList *xi_lexer(FILE *src_file, XISymbols *xi_symbols) {
                                 XIToken *a = wk_link_get(prev, XIToken *);
                                 if (a->type == XI_SNIPPET_NAME_DELIMITER) {
                                         WKStr *language = extract_block_at_head(t,
-                                                                                xi_symbols->language_beginning_mark,
-                                                                                xi_symbols->language_end_mark);
+                                                                                xi_symbols->language_start_mark,
+                                                                                xi_symbols->language_stop_mark);
                                         if (language) {
                                                 add_block(xi_tokens,
                                                           it,
                                                           language,
-                                                          xi_symbols->language_beginning_mark,
-                                                          XI_LANGUAGE_BEGINNING_MARK,
-                                                          xi_symbols->language_end_mark,
-                                                          XI_LANGUAGE_END_MARK);
+                                                          xi_symbols->language_start_mark,
+                                                          XI_LANGUAGE_START_MARK,
+                                                          xi_symbols->language_stop_mark,
+                                                          XI_LANGUAGE_STOP_MARK);
                                         }
                                 }
                         }
@@ -530,18 +537,18 @@ static WKList *xi_lexer(FILE *src_file, XISymbols *xi_symbols) {
                         if (prev) {
                                 XIToken *a = wk_link_get(prev, XIToken *);
                                 if (a->type == XI_SNIPPET_NAME_DELIMITER
-                                    || a->type == XI_LANGUAGE_END_MARK) {
+                                    || a->type == XI_LANGUAGE_STOP_MARK) {
                                         WKStr *tag_reference = extract_block_at_head(t,
-                                                                                     xi_symbols->tag_beginning_mark,
-                                                                                     xi_symbols->tag_end_mark);
+                                                                                     xi_symbols->tag_start_mark,
+                                                                                     xi_symbols->tag_stop_mark);
                                         if (tag_reference) {
                                                 add_block(xi_tokens,
                                                           it,
                                                           tag_reference,
-                                                          xi_symbols->tag_beginning_mark,
-                                                          XI_TAG_BEGINNING_MARK,
-                                                          xi_symbols->tag_end_mark,
-                                                          XI_TAG_END_MARK);
+                                                          xi_symbols->tag_start_mark,
+                                                          XI_TAG_START_MARK,
+                                                          xi_symbols->tag_stop_mark,
+                                                          XI_TAG_STOP_MARK);
                                         }
                                         WKStr *appending_mark = extract_operator(t, xi_symbols->snippet_appending_mark);
                                         if (appending_mark) {
@@ -572,20 +579,20 @@ static WKList *xi_lexer(FILE *src_file, XISymbols *xi_symbols) {
                         if (prev) {
                                 XIToken *a = wk_link_get(prev, XIToken *);
                                 if (a->type == XI_SNIPPET_NAME_DELIMITER
-                                    || a->type == XI_LANGUAGE_END_MARK
+                                    || a->type == XI_LANGUAGE_STOP_MARK
                                     || a->type == XI_SNIPPET_APPENDING_MARK
                                     || a->type == XI_SNIPPET_PREPENDING_MARK) {
                                         WKStr *tag_mark = extract_block_at_head(t,
-                                                                                xi_symbols->tag_beginning_mark,
-                                                                                xi_symbols->tag_end_mark);
+                                                                                xi_symbols->tag_start_mark,
+                                                                                xi_symbols->tag_stop_mark);
                                         if (tag_mark) {
                                                 add_block(xi_tokens,
                                                           it,
                                                           tag_mark,
-                                                          xi_symbols->tag_beginning_mark,
-                                                          XI_TAG_BEGINNING_MARK,
-                                                          xi_symbols->tag_end_mark,
-                                                          XI_TAG_END_MARK);
+                                                          xi_symbols->tag_start_mark,
+                                                          XI_TAG_START_MARK,
+                                                          xi_symbols->tag_stop_mark,
+                                                          XI_TAG_STOP_MARK);
                                         }
                                 }
                         }
@@ -601,21 +608,21 @@ static WKList *xi_lexer(FILE *src_file, XISymbols *xi_symbols) {
                         if (prev) {
                                 XIToken *t_prev = wk_link_get(prev, XIToken *);
                                 if (t_prev->type != XI_SNIPPET_DELIMITER
-                                    || t_prev->type != XI_LANGUAGE_BEGINNING_MARK
-                                    || t_prev->type != XI_TAG_BEGINNING_MARK) {
+                                    || t_prev->type != XI_LANGUAGE_START_MARK
+                                    || t_prev->type != XI_TAG_START_MARK) {
                                         while (1) {
                                                 WKPair *snippet_reference
                                                         = find_snippet_reference(t->content,
-                                                                                 xi_symbols->snippet_reference_beginning_mark,
-                                                                                 xi_symbols->snippet_reference_end_mark,
+                                                                                 xi_symbols->snippet_reference_start_mark,
+                                                                                 xi_symbols->snippet_reference_stop_mark,
                                                                                  xi_symbols->snippet_name_continuation);
                                                 if (snippet_reference) {
                                                         split_snippet(xi_tokens,
                                                                       it,
                                                                       snippet_reference,
                                                                       xi_symbols->snippet_name_continuation,
-                                                                      xi_symbols->snippet_reference_beginning_mark,
-                                                                      xi_symbols->snippet_reference_end_mark);
+                                                                      xi_symbols->snippet_reference_start_mark,
+                                                                      xi_symbols->snippet_reference_stop_mark);
                                                         wk_box_free(snippet_reference->x);
                                                         wk_box_free(snippet_reference->y);
                                                         free(snippet_reference);
@@ -713,7 +720,7 @@ static void add_branches_for_snippet_with_name(WKTree *syntax_tree, WKBranch *x)
         wk_tree_add(syntax_tree, x, snippet_name, XISyntax *);
         it = it->next->next; /* 跳过片段名字界限符 */
         current_token = wk_link_get(it, XIToken *);
-        if (current_token->type == XI_LANGUAGE_BEGINNING_MARK) {
+        if (current_token->type == XI_LANGUAGE_START_MARK) {
                 XISyntax *language = malloc(sizeof(XISyntax));
                 it = it->next;
                 current_token = wk_link_get(it, XIToken *);
@@ -727,7 +734,7 @@ static void add_branches_for_snippet_with_name(WKTree *syntax_tree, WKBranch *x)
                 it = it->next; /* 跳过语言标记终结符 */
         }
         current_token = wk_link_get(it, XIToken *);
-        if (current_token->type == XI_TAG_BEGINNING_MARK) {
+        if (current_token->type == XI_TAG_START_MARK) {
                 bool is_tag_ref = false;
                 for (WKLink *it_a = it; it_a; it_a = it_a->next) {
                        XIToken *t = wk_link_get(it_a, XIToken *);
@@ -769,7 +776,7 @@ static void add_branches_for_snippet_with_name(WKTree *syntax_tree, WKBranch *x)
                 it = it->next;
         }
         current_token = wk_link_get(it, XIToken *);
-        if (current_token->type == XI_TAG_BEGINNING_MARK) {
+        if (current_token->type == XI_TAG_START_MARK) {
                 XISyntax *tag = malloc(sizeof(XISyntax));
                 it = it->next;
                 current_token = wk_link_get(it, XIToken *);
@@ -793,10 +800,10 @@ static void add_branches_for_snippet_with_name(WKTree *syntax_tree, WKBranch *x)
         for (it = snippet->tokens->head; it; it = it->next) {
                 current_token = wk_link_get(it, XIToken *);
                 if (current_token->type == XI_SNIPPET_NAME_DELIMITER
-                    || current_token->type == XI_LANGUAGE_BEGINNING_MARK
-                    || current_token->type == XI_LANGUAGE_END_MARK
-                    || current_token->type == XI_TAG_BEGINNING_MARK
-                    || current_token->type == XI_TAG_END_MARK) {
+                    || current_token->type == XI_LANGUAGE_START_MARK
+                    || current_token->type == XI_LANGUAGE_STOP_MARK
+                    || current_token->type == XI_TAG_START_MARK
+                    || current_token->type == XI_TAG_STOP_MARK) {
                         wk_str_free(current_token->content);
                         free(current_token);
                 }
@@ -810,7 +817,7 @@ static void add_branches_for_snippet_content(WKTree *syntax_tree, WKBranch *x)
         WKLink *it = content->tokens->head;
         while (it) {
                 XIToken *token = wk_link_get(it, XIToken *);
-                if (token->type == XI_SNIPPET_REFERENCE_BEGINNING_MARK) {
+                if (token->type == XI_SNIPPET_REFERENCE_START_MARK) {
                         it = it->next;
                         token = wk_link_get(it, XIToken *);
                         /* 构造片段引用 */
@@ -835,8 +842,8 @@ static void add_branches_for_snippet_content(WKTree *syntax_tree, WKBranch *x)
         /* 释放 content->tokens */
         for (it = content->tokens->head; it; it = it->next) {
                 XIToken *token = wk_link_get(it, XIToken *);
-                if (token->type == XI_SNIPPET_REFERENCE_BEGINNING_MARK
-                    || token->type == XI_SNIPPET_REFERENCE_END_MARK) {
+                if (token->type == XI_SNIPPET_REFERENCE_START_MARK
+                    || token->type == XI_SNIPPET_REFERENCE_STOP_MARK) {
                         wk_str_free(token->content);
                         free(token);
                 }
@@ -1338,6 +1345,51 @@ static void spread_language_mark(WKTree *xi_tree, WKTable *relations) {
                 }
         }
 }
+WKArray *snippet_name_split(WKStr *name, WKStr *continuation) {
+        WKArray *segments = wk_array(WKStr *);
+        WKStr *a = wk_str(NULL);
+        WKStr *b = NULL;
+        const char *p = name->body;
+        const char *q = name->body + name->n;
+        WKStr *quad = wk_str("　");
+        enum {INIT, WHITE_AREA} state = INIT;
+        while (1) {
+                if (*p == '\0') break;
+                switch (state) {
+                case INIT:
+                        if (strstr(p, continuation->body) == p) {
+                                p += continuation->n - 1;
+                                wk_array_add(segments, a, WKStr *);
+                                a = wk_str(NULL);
+                                b = wk_str(NULL);
+                                wk_str_suffix(b, continuation->body);
+                                state = WHITE_AREA;
+                        } else {
+                                wk_str_suffix_char(a, *p);
+                        }
+                        break;
+                case WHITE_AREA:
+                        if (*p == '\n' || *p == ' ' || *p == '\t') {
+                                wk_str_suffix_char(b, *p);
+                        } else if (here_is_me(p, q, p, 1, quad)) {
+                                wk_str_suffix(b, quad->body);
+                        } else {
+                                wk_array_add(segments, b, WKStr *);
+                                wk_str_suffix_char(a, *p);
+                                state = INIT;
+                        }
+                        break;
+                default:
+                        fprintf(stderr, "Illegal state in <%s>!\n", name->body);
+                        exit(EXIT_FAILURE);
+                }
+                p++;
+        }
+        if (a->n > 0) wk_array_add(segments, a, WKStr *);
+        else wk_str_free(a);
+        wk_str_free(quad);
+        return segments;
+}
 static void output_snippet_with_name(WKBranch *x,
                                      WKTable *relations,
                                      XISymbols *symbols,
@@ -1354,7 +1406,7 @@ static void output_snippet_with_name(WKBranch *x,
                         }
                         fprintf(output, "%s", a->body);
                         wk_str_free(a);
-                } else fprintf(output, "%s", symbols->snippet_delimiter->body);
+                }
                 
         } while (0);
         for (size_t i = 0; i < x->lower->n; i++) {
@@ -1368,11 +1420,47 @@ static void output_snippet_with_name(WKBranch *x,
                                 if (fmt->snippet_name->n > 0) {
                                         XISyntax *x_syntax = wk_branch_get(x, XISyntax *);
                                         wk_str_printf(id_text, "%lu", x_syntax->id);
-                                        WKStr *a = wk_str(fmt->snippet_name->body);
-                                        wk_str_replace(a, "${name}", y_token->content->body);
-                                        wk_str_replace(a, "${id}", id_text->body);
-                                        fprintf(output, "%s", a->body);
-                                        wk_str_free(a);
+                                        WKArray *segments = snippet_name_split(y_token->content,
+                                                                               symbols->snippet_name_continuation);
+                                        /* 输出片段定界符 */
+                                        if (fmt->snippet_name_start->n > 0) {
+                                                fprintf(output, "%s", fmt->snippet_name_start->body);
+                                        } else {
+                                                fprintf(output, "%s", symbols->snippet_delimiter->body);
+                                        }
+                                        /* 输出名字 */
+                                        for (size_t j = 0; j < segments->n; j++) {
+                                                WKStr *segment = wk_array_get(segments, j, WKStr *);
+                                                if (j % 2 == 0) {
+                                                        WKStr *snippet_name_t = wk_str(fmt->snippet_name->body);
+                                                        wk_str_replace(snippet_name_t, "${name}", segment->body);
+                                                        fprintf(output, "%s", snippet_name_t->body);
+                                                        wk_str_free(snippet_name_t);
+                                                } else { /* 输出续行符以及下一行的前导空白字符 */
+                                                        if (fmt->snippet_name_continuation->n > 0) {
+                                                                wk_str_replace(segment,
+                                                                               symbols->snippet_name_continuation->body,
+                                                                               fmt->snippet_name_continuation->body);
+                                                                fprintf(output, "%s", segment->body);
+                                                        } else {
+                                                                fprintf(output, "%s", segment->body);
+                                                        }
+                                                }
+                                                wk_str_free(segment);
+                                        }
+                                        /* 输出名字定界符 */
+                                        if (fmt->snippet_name_stop->n > 0) {
+                                                fprintf(output, "%s", fmt->snippet_name_stop->body);
+                                        } else {
+                                                fprintf(output, "%s", symbols->snippet_name_delimiter->body);
+                                        }
+                                        if (fmt->snippet_id->n > 0) {
+                                                WKStr *snippet_id = wk_str(fmt->snippet_id->body);
+                                                wk_str_replace(snippet_id, "${id}", id_text->body);
+                                                fprintf(output, "%s", snippet_id->body);
+                                                wk_str_free(snippet_id);
+                                        }
+                                        wk_array_free(segments);
                                 } else fprintf(output, "%s%s%s",
                                                        symbols->snippet_delimiter->body,
                                                        y_token->content->body,
@@ -1395,9 +1483,9 @@ static void output_snippet_with_name(WKBranch *x,
                                         wk_str_free(a);
                                 } else {
                                         fprintf(output, " %s%s%s",
-                                                        symbols->tag_beginning_mark->body,
+                                                        symbols->tag_start_mark->body,
                                                         tag_ref_token->content->body,
-                                                        symbols->tag_end_mark->body);
+                                                        symbols->tag_stop_mark->body);
                                 }
                         } while (0);
                         break;
@@ -1429,9 +1517,9 @@ static void output_snippet_with_name(WKBranch *x,
                                         wk_str_free(a);
                                 } else {
                                         fprintf(output, " %s%s%s",
-                                                        symbols->tag_beginning_mark->body,
+                                                        symbols->tag_start_mark->body,
                                                         tag_token->content->body,
-                                                        symbols->tag_end_mark->body);
+                                                        symbols->tag_stop_mark->body);
                                 }
                         } while (0);
                         break;
@@ -1450,16 +1538,45 @@ static void output_snippet_with_name(WKBranch *x,
                                                 fprintf(stderr, "Line %lu: the snippet <%s> not defined!\n",
                                                                 z_token->line_number, z_token->content->body);
                                                 fprintf(output, "%s%s%s",
-                                                                symbols->snippet_reference_beginning_mark->body,
+                                                                symbols->snippet_reference_start_mark->body,
                                                                 z_token->content->body,
-                                                                symbols->snippet_reference_end_mark->body);
+                                                                symbols->snippet_reference_stop_mark->body);
                                                 exit(EXIT_FAILURE);
                                         }
                                         XITie *tie = wk_box_get(tie_box, XITie *);
                                         if (fmt->snippet_reference->n > 0) {
-                                                WKStr *ref = wk_str(fmt->snippet_reference->body);
-                                                wk_str_replace(ref, "${name}", z_token->content->body);
-                                                fprintf(output, "%s", ref->body);
+                                                WKArray *segments = snippet_name_split(z_token->content,
+                                                                                       symbols->snippet_name_continuation);
+                                                if (fmt->snippet_reference_start->n > 0) {
+                                                        fprintf(output, "%s", fmt->snippet_reference_start->body);
+                                                } else {
+                                                        fprintf(output, "%s", symbols->snippet_reference_start_mark->body);
+                                                }
+                                                for (size_t j = 0; j < segments->n; j++) {
+                                                        WKStr *segment = wk_array_get(segments, j, WKStr *);
+                                                        if (j % 2 == 0) {
+                                                                WKStr *snippet_name_t = wk_str(fmt->snippet_reference->body);
+                                                                wk_str_replace(snippet_name_t, "${name}", segment->body);
+                                                                fprintf(output, "%s", snippet_name_t->body);
+                                                                wk_str_free(snippet_name_t);
+                                                        } else { /* 输出续行符以及下一行的前导空白字符 */
+                                                                if (fmt->snippet_name_continuation->n > 0) {
+                                                                        wk_str_replace(segment,
+                                                                                       symbols->snippet_name_continuation->body,
+                                                                                       fmt->snippet_name_continuation->body);
+                                                                        fprintf(output, "%s", segment->body);
+                                                                } else {
+                                                                        fprintf(output, "%s", segment->body);
+                                                                }
+                                                        }
+                                                        wk_str_free(segment);
+                                                }
+                                                wk_array_free(segments);
+                                                if (fmt->snippet_reference_stop->n > 0) {
+                                                        fprintf(output, "%s", fmt->snippet_reference_stop->body);
+                                                } else {
+                                                        fprintf(output, "%s", symbols->snippet_reference_stop_mark->body);
+                                                }
                                                 for (size_t k = 0; k < tie->spatial_order->n; k++) {
                                                         WKBranch *z_ref = wk_array_get(tie->spatial_order, k, WKBranch *);
                                                         XISyntax *z_ref_syntax = wk_branch_get(z_ref, XISyntax *);
@@ -1471,12 +1588,11 @@ static void output_snippet_with_name(WKBranch *x,
                                                                 wk_str_free(ref_id);
                                                         }
                                                 }
-                                                wk_str_free(ref);
                                         } else {
                                                 fprintf(output, "%s%s%s",
-                                                                 symbols->snippet_reference_beginning_mark->body,
+                                                                 symbols->snippet_reference_start_mark->body,
                                                                  z_token->content->body,
-                                                                 symbols->snippet_reference_end_mark->body);
+                                                                 symbols->snippet_reference_stop_mark->body);
                                                 for (size_t k = 0; k < tie->spatial_order->n; k++) {
                                                         WKBranch *z_ref = wk_array_get(tie->spatial_order, k, WKBranch *);
                                                         XISyntax *z_ref_syntax = wk_branch_get(z_ref, XISyntax *);
@@ -1585,8 +1701,8 @@ int main(int argc, char **argv) {
         const char *end_opt = xi_args[4].value.text;
         if (strcmp(end_opt, "") == 0) end_opt = NULL;
         bool weave_opt = xi_args[5].value.toggle;
-        const char *xi_config_file = xi_args[6].value.text;
-        if (strcmp(xi_config_file, "") == 0) xi_config_file = NULL;
+        const char *xi_config_path = xi_args[6].value.text;
+        if (strcmp(xi_config_path, "") == 0) xi_config_path = NULL;
         const char *output_opt = xi_args[7].value.text;
         if (strcmp(output_opt, "") == 0) output_opt = NULL;
         bool help_opt = xi_args[8].value.toggle;
@@ -1632,52 +1748,66 @@ int main(int argc, char **argv) {
                         .snippet_delimiter = wk_str("@"),
                         .snippet_name_delimiter = wk_str("#"),
                         .snippet_name_continuation = wk_str("\\"),
-                        .language_beginning_mark = wk_str("["),
-                        .language_end_mark = wk_str("]"),
+                        .language_start_mark = wk_str("["),
+                        .language_stop_mark = wk_str("]"),
                         .snippet_appending_mark = wk_str("+"),
                         .snippet_prepending_mark = wk_str("^+"),
-                        .tag_beginning_mark = wk_str("<"),
-                        .tag_end_mark = wk_str(">"),
-                        .snippet_reference_beginning_mark = wk_str("#"),
-                        .snippet_reference_end_mark = wk_str("@")
+                        .tag_start_mark = wk_str("<"),
+                        .tag_stop_mark = wk_str(">"),
+                        .snippet_reference_start_mark = wk_str("#"),
+                        .snippet_reference_stop_mark = wk_str("@")
                 };
-                WKTable *user_config = xi_config_file ? wk_cfg(xi_config_file) : NULL;
+                WKTable *user_config = xi_config_path ? wk_cfg(xi_config_path) : NULL;
                 /* 用 user_config 中的设定，替换 xi_config 中的字段 */
                 if (user_config) {
                         XI_USER_CONFIG(user_config, xi_symbols, snippet_delimiter);
                         XI_USER_CONFIG(user_config, xi_symbols, snippet_name_delimiter);
                         XI_USER_CONFIG(user_config, xi_symbols, snippet_name_continuation);
-                        XI_USER_CONFIG(user_config, xi_symbols, language_beginning_mark);
-                        XI_USER_CONFIG(user_config, xi_symbols, language_end_mark);
+                        XI_USER_CONFIG(user_config, xi_symbols, language_start_mark);
+                        XI_USER_CONFIG(user_config, xi_symbols, language_stop_mark);
                         XI_USER_CONFIG(user_config, xi_symbols, snippet_appending_mark);
                         XI_USER_CONFIG(user_config, xi_symbols, snippet_prepending_mark);
-                        XI_USER_CONFIG(user_config, xi_symbols, tag_beginning_mark);
-                        XI_USER_CONFIG(user_config, xi_symbols, tag_end_mark);
-                        XI_USER_CONFIG(user_config, xi_symbols, snippet_reference_beginning_mark);
-                        XI_USER_CONFIG(user_config, xi_symbols, snippet_reference_end_mark);
+                        XI_USER_CONFIG(user_config, xi_symbols, tag_start_mark);
+                        XI_USER_CONFIG(user_config, xi_symbols, tag_stop_mark);
+                        XI_USER_CONFIG(user_config, xi_symbols, snippet_reference_start_mark);
+                        XI_USER_CONFIG(user_config, xi_symbols, snippet_reference_stop_mark);
                 }
                 XIFmt *xi_fmt = malloc(sizeof(XIFmt));
-                *xi_fmt = (XIFmt){ wk_str(NULL), wk_str(NULL), wk_str(NULL), wk_str(NULL), wk_str(NULL),
-                                   wk_str(NULL), wk_str(NULL), wk_str(NULL), wk_str(NULL), wk_str(NULL) };
+                *xi_fmt = (XIFmt){ wk_str(NULL), wk_str(NULL), wk_str(NULL), wk_str(NULL),
+                                   wk_str(NULL), wk_str(NULL), wk_str(NULL), wk_str(NULL),
+                                   wk_str(NULL), wk_str(NULL), wk_str(NULL), wk_str(NULL),
+                                   wk_str(NULL), wk_str(NULL), wk_str(NULL), wk_str(NULL) };
                 if (user_config) {
                         XI_USER_CONFIG(user_config, xi_fmt, snippet_start);
                         XI_USER_CONFIG(user_config, xi_fmt, snippet_stop);
+                        XI_USER_CONFIG(user_config, xi_fmt, snippet_name_start);
                         XI_USER_CONFIG(user_config, xi_fmt, snippet_name);
+                        XI_USER_CONFIG(user_config, xi_fmt, snippet_id);
+                        XI_USER_CONFIG(user_config, xi_fmt, snippet_name_continuation);
+                        XI_USER_CONFIG(user_config, xi_fmt, snippet_name_stop);
                         XI_USER_CONFIG(user_config, xi_fmt, snippet_tag);
                         XI_USER_CONFIG(user_config, xi_fmt, snippet_tag_reference);
+                        XI_USER_CONFIG(user_config, xi_fmt, snippet_reference_start);
                         XI_USER_CONFIG(user_config, xi_fmt, snippet_reference);
                         XI_USER_CONFIG(user_config, xi_fmt, snippet_reference_id);
+                        XI_USER_CONFIG(user_config, xi_fmt, snippet_reference_stop);
                         XI_USER_CONFIG(user_config, xi_fmt, snippet_emission);
                         XI_USER_CONFIG(user_config, xi_fmt, snippet_appending_operator);
                         XI_USER_CONFIG(user_config, xi_fmt, snippet_prepending_operator);
                         /* 将各配置项中可能存在的字面换行符替换为真正的换行符 */
                         wk_str_replace(xi_fmt->snippet_start, "\\n", "\n");
                         wk_str_replace(xi_fmt->snippet_stop, "\\n", "\n");
+                        wk_str_replace(xi_fmt->snippet_name_start, "\\n", "\n");
                         wk_str_replace(xi_fmt->snippet_name, "\\n", "\n");
+                        wk_str_replace(xi_fmt->snippet_id, "\\n", "\n");
+                        wk_str_replace(xi_fmt->snippet_name_continuation, "\\n", "\n");
+                        wk_str_replace(xi_fmt->snippet_name_stop, "\\n", "\n");
                         wk_str_replace(xi_fmt->snippet_tag, "\\n", "\n");
                         wk_str_replace(xi_fmt->snippet_tag_reference, "\\n", "\n");
+                        wk_str_replace(xi_fmt->snippet_reference_start, "\\n", "\n");
                         wk_str_replace(xi_fmt->snippet_reference, "\\n", "\n");
                         wk_str_replace(xi_fmt->snippet_reference_id, "\\n", "\n");
+                        wk_str_replace(xi_fmt->snippet_reference_stop, "\\n", "\n");
                         wk_str_replace(xi_fmt->snippet_emission, "\\n", "\n");
                         wk_str_replace(xi_fmt->snippet_appending_operator, "\\n", "\n");
                         wk_str_replace(xi_fmt->snippet_prepending_operator, "\\n", "\n");
@@ -1762,14 +1892,14 @@ int main(int argc, char **argv) {
                 wk_str_free(xi_symbols->snippet_delimiter);
                 wk_str_free(xi_symbols->snippet_name_delimiter);
                 wk_str_free(xi_symbols->snippet_name_continuation);
-                wk_str_free(xi_symbols->language_beginning_mark);
-                wk_str_free(xi_symbols->language_end_mark);
+                wk_str_free(xi_symbols->language_start_mark);
+                wk_str_free(xi_symbols->language_stop_mark);
                 wk_str_free(xi_symbols->snippet_appending_mark);
                 wk_str_free(xi_symbols->snippet_prepending_mark);
-                wk_str_free(xi_symbols->tag_beginning_mark);
-                wk_str_free(xi_symbols->tag_end_mark);
-                wk_str_free(xi_symbols->snippet_reference_beginning_mark);
-                wk_str_free(xi_symbols->snippet_reference_end_mark);
+                wk_str_free(xi_symbols->tag_start_mark);
+                wk_str_free(xi_symbols->tag_stop_mark);
+                wk_str_free(xi_symbols->snippet_reference_start_mark);
+                wk_str_free(xi_symbols->snippet_reference_stop_mark);
                 free(xi_symbols);
                 fclose(src_file);
                 for (size_t i = 0; i < skipped_chars->n; i++) {
@@ -1780,11 +1910,17 @@ int main(int argc, char **argv) {
                 wk_array_free(skipped_chars_in_snippet_name);
                 wk_str_free(xi_fmt->snippet_start);
                 wk_str_free(xi_fmt->snippet_stop);
+                wk_str_free(xi_fmt->snippet_name_start);
                 wk_str_free(xi_fmt->snippet_name);
+                wk_str_free(xi_fmt->snippet_id);
+                wk_str_free(xi_fmt->snippet_name_continuation);
+                wk_str_free(xi_fmt->snippet_name_stop);
                 wk_str_free(xi_fmt->snippet_tag);
                 wk_str_free(xi_fmt->snippet_tag_reference);
+                wk_str_free(xi_fmt->snippet_reference_start);
                 wk_str_free(xi_fmt->snippet_reference);
                 wk_str_free(xi_fmt->snippet_reference_id);
+                wk_str_free(xi_fmt->snippet_reference_stop);
                 wk_str_free(xi_fmt->snippet_emission);
                 wk_str_free(xi_fmt->snippet_appending_operator);
                 wk_str_free(xi_fmt->snippet_prepending_operator);
