@@ -97,14 +97,21 @@ $ xi -w -c markdown.conf -o foo.md foo.xi
 markdown.conf 文件可以放在 foo.xi 所在目录，其内容为
 
 ```yaml
-snippet_start: <pre>
-snippet_stop: </pre>
-snippet_name: "\n<span class=\"snippet-name\" id=\"#xi-${id}\">@${name}#</span> "
-snippet_reference: "<span class=\"snippet-reference\">#${name}@</span>"
-snippet_reference_id: "<span class=\"snippet-id\"><a href=\"#xi-${id}\">[${id}]</a></span>"
+snippet_start: "<pre>\n"
+snippet_stop: "</pre>"
+snippet_name_start: "@"
+snippet_name: "<span class=\"snippet-name\">${name}</span>"
+snippet_id: "<span class=\"snippet-id\" id=\"#xi-${id}\">&lt;${id}&gt;</span>"
+snippet_name_stop: "#"
+snippet_reference_start: "#"
+snippet_reference: "<span class=\"snippet-reference\">${name}</span>"
+snippet_reference_id: "<span class=\"snippet-id\">
+                         <a href=\"#xi-${id}\">&lt;${id}&gt;</a>
+                       </span>"
+snippet_reference_stop: "@"
 snippet_emission: "<span class=\"snippet-emission\">=> ${name}</span>
                    <span class=\"snippet-id\">
-                      <a href=\"#xi-${id}\">[${id}]</a>
+                      <a href=\"#xi-${id}\">&lt;${id}&gt;</a>
                    </span>"
 ```
 
@@ -114,16 +121,16 @@ snippet_emission: "<span class=\"snippet-emission\">=> ${name}</span>
 C 语言的 hello world 程序可以像下面这样逐步写出来。首先，需要包含标准库中的标准输入输出头文件：
 
 <pre>
-<span class="snippet-name" id="#xi-1">@ hello world #</span>
+@<span class="snippet-name"> hello world </span>#<span class="snippet-id" id="#xi-1">&lt;1&gt;</span>
 #include <stdio.h>
 </pre>
 
 然后，编写程序的入口函数：
 
 <pre>
-<span class="snippet-name" id="#xi-2">@ hello world #</span> +
+@<span class="snippet-name"> hello world </span>#<span class="snippet-id" id="#xi-2">&lt;2&gt;</span> +
 int main(void) {
-        <span class="snippet-reference"># 在屏幕上打印 Hello world! @</span><span class="snippet-id"><a href="#xi-3">[3]</a></span>
+        #<span class="snippet-reference"> 在屏幕上打印 Hello world! </span>@<span class="snippet-id"><a href="#xi-3">[3]</a></span>
         return 0;
 }
 </pre>
@@ -131,9 +138,9 @@ int main(void) {
 最后，调用标准库的 `printf` 函数在屏幕上打印字符串 `"Hello world!"`：
 
 <pre>
-<span class="snippet-name" id="#xi-3">@ 在屏幕上打印 Hello world! #</span>
+@<span class="snippet-name"> 在屏幕上打印 Hello world! </span>#<span class="snippet-id" id="#xi-3">&lt;3&gt;</span>
 printf("Hello world!\n");
-<span class="snippet-emission">=>  hello world </span><span class="snippet-id"><a href="#xi-2">[2]</a></span></pre>
+<span class="snippet-emission">=>  hello world </span><span class="snippet-id"><a href="#xi-2">&lt;2&gt;</a></span></pre>
 ```
 
 # 配置文件
@@ -141,13 +148,18 @@ printf("Hello world!\n");
 理论上，xi 能够支持任何排版语言，前提是需要提供相应的格式化配置文件。下面是我为 ConTeXt LMTX 编写的配置文件，谨供参考：
 
 ```yaml
-snippet_start: \start${language}
+# 输出格式
+snippet_start: \start${language}\n
 snippet_stop: \stop${language}
-snippet_name: "\n/BTEX\color[darkred]{@${name}\#}
-               \reference[xi-${id}]{${id}}\inoutermargin{\darkred{${id}}}/ETEX"
-snippet_tag: "\n/BTEX\color[darkmagenta]{<${name}>}/ETEX"
-snippet_tag_reference: "/BTEX\color[darkmagenta]{\ <${name}>\ }/ETEX"
-snippet_reference: "/BTEX\color[darkcyan]{\tt \#${name}@}/ETEX"
-snippet_reference_id: "/BTEX\ <\in[xi-${id}]>/ETEX"
-snippet_emission: "/BTEX=>\color[darkyellow]{${name}}<\in[xi-${id}]>/ETEX\n"
+snippet_name_start: /BTEX\color[darkred]{@}/ETEX
+snippet_name: /BTEX\color[darkred]{${name}}/ETEX
+snippet_id: /BTEX\reference[xi-${id}]{${id}}\inoutermargin{\darkred{${id}}}/ETEX
+snippet_name_stop: "/BTEX\color[darkred]{\#}/ETEX"
+snippet_tag: \n/BTEX\color[darkmagenta]{<${name}>}/ETEX
+snippet_tag_reference: /BTEX\color[darkmagenta]{\ <${name}>\ }/ETEX
+snippet_reference_start: "/BTEX\color[darkcyan]{\#}/ETEX"
+snippet_reference: /BTEX\color[darkcyan]{${name}}/ETEX
+snippet_reference_id: /BTEX\ <\in[xi-${id}]>/ETEX
+snippet_reference_stop: "/BTEX\color[darkcyan]{@}/ETEX"
+snippet_emission: /BTEX=>\color[darkyellow]{${name}}<\in[xi-${id}]>/ETEX\n
 ```
