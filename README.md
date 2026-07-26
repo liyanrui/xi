@@ -87,7 +87,7 @@ int dot_product(double x[], double y[], int n) {
 
 # 编织文档
 
-若将上一节 foo.xi 文件转换为 Markdown 或 HTML 格式的文档，但 xi 并不知晓如何将文学编程标记转化为相应的格式，它需要我们以配置文件的方式告诉它应该如何做。下面是一份简单的 xi 配置文件markdown.conf 的内容：
+若将上一节 foo.xi 文件转换为 Markdown（需要内嵌 HTML 标记）格式的文档，但 xi 并不知晓如何将文学编程标记转化为相应的格式，它需要我们以配置文件的方式告诉它应该如何做。下面是一份简单的 xi 配置文件 markdown.conf 的内容：
 
 ```yaml
 snippet_start: "<pre>\n"
@@ -104,7 +104,7 @@ snippet_emission: "<span class=\"snippet-emission\">=> ${name}</span>
                    </span>"
 ```
 
-基于 markdown.conf 文件，可将 foo.xi 转化为 Markdown 文档 foo.md 的命令为
+基于 markdown.conf 文件，可将 foo.xi 转化为一份内嵌 HTML 标记的 Markdown 文档的命令为
 
 ```
 $ xi --weave --config markdown.conf --output foo.md foo.xi
@@ -116,7 +116,7 @@ $ xi --weave --config markdown.conf --output foo.md foo.xi
 $ xi -w -c markdown.conf -o foo.md foo.xi
 ```
 
-生成的 foo.md 内容如下：
+生成的 Markdown 文档 foo.md 内容如下：
 
 ```html
 以下函数用于计算向量点积：
@@ -193,14 +193,11 @@ foo.yml 内容如下：
         int dot_product(double x[], double y[], int n) {
                 double sum = 0;
                 '
-  content:
     - type: snippet-reference
-      data:
       name: |-
         ' n 维向量 x 与 y 的点积 '
       ids:
         - 2
-  content:
     - type: text
       data: |-
         '
