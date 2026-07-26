@@ -107,13 +107,13 @@ snippet_emission: "<span class=\"snippet-emission\">=> ${name}</span>
 基于 markdown.conf 文件，可将 foo.xi 转化为 Markdown 文档 foo.md 的命令为
 
 ```
-$ xi --weave --config html.conf --output foo.html foo.xi
+$ xi --weave --config markdown.conf --output foo.md foo.xi
 ```
 
 或者
 
 ```
-$ xi -w -c html.conf -o foo.html foo.xi
+$ xi -w -c markdown.conf -o foo.md foo.xi
 ```
 
 生成的 foo.md 内容如下：
