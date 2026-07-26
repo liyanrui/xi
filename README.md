@@ -13,7 +13,7 @@ $ make
 $ sudo make install
 ```
 
-WK 库文件 libwk.a 与 libwk.so 默认会安装在 /usr/local/bin 目录，头文件则在 /usr/local/include 目录。
+WK 库文件 libwk.a 与 libwk.so 默认会安装在 /usr/local/lib 目录，头文件则在 /usr/local/include 目录。
 
 然后下载 xi 源码，建议以连接 WK 静态库（libwk.a）的方式编译：
 
