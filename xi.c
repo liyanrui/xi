@@ -452,6 +452,7 @@ static WKList *xi_lexer(FILE *src_file, XISymbols *xi_symbols) {
         }
         if (cache->n > 0) {
                 add_snippet(xi_tokens, cache);
+                add_snippet_delimiter(xi_tokens, xi_symbols->snippet_delimiter);
         } else wk_str_free(cache);
         WKLink *it = xi_tokens->head;
         while (it) {
@@ -492,12 +493,17 @@ static WKList *xi_lexer(FILE *src_file, XISymbols *xi_symbols) {
         			wk_str_free(t->content);
                                 free(t);
         			wk_list_del(xi_tokens, it);
-                                /* 在 next 之前插入新节点 */
-        			WK_LIST_INSF(xi_tokens, next, &snippet_name);
-                                WK_LIST_INSF(xi_tokens, next, &snippet_name_delimiter);
-                                WK_LIST_INSF(xi_tokens, next, &snippet);
-                                /* 调整迭代指针 */
-                                it = next->prev;
+                                if (next) { /* 在 next 之前插入新节点 */
+        			        WK_LIST_INSF(xi_tokens, next, &snippet_name);
+                                        WK_LIST_INSF(xi_tokens, next, &snippet_name_delimiter);
+                                        WK_LIST_INSF(xi_tokens, next, &snippet);
+                                        it = next->prev; /* 调整迭代指针 */
+                                } else { /* 在记号列表尾部插入新节点 */
+                                        wk_list_suffix(xi_tokens, snippet_name, XIToken *);
+                                        wk_list_suffix(xi_tokens, snippet_name_delimiter, XIToken *);
+                                        wk_list_suffix(xi_tokens, snippet, XIToken *);
+                                        it = xi_tokens->tail; /* 调整迭代指针 */
+                                }
                         }
                 }
                 it = it->next;
@@ -632,11 +638,6 @@ static WKList *xi_lexer(FILE *src_file, XISymbols *xi_symbols) {
                         }
                 }
                 it = it->next;
-        }
-        /* 为记号列表尾部追加一个片段界限符，以便于后续程序处理 */
-        XIToken *last_token = wk_link_get(xi_tokens->tail, XIToken *);
-        if (last_token->type != XI_SNIPPET_DELIMITER) {
-                add_snippet_delimiter(xi_tokens, xi_symbols->snippet_delimiter);
         }
         return xi_tokens;
 }
@@ -1963,9 +1964,16 @@ int main(int argc, char **argv) {
                                 fprintf(stderr, "Illegal output!");
                                 exit(EXIT_FAILURE);
                         }
-                        WKPair *area = snippet_area(xi_tree, beginning_opt, end_opt);
-                        size_t u = wk_box_get(area->x, size_t);
-                        size_t v = wk_box_get(area->y, size_t);
+                        size_t u = 0;
+                        size_t v = SIZE_MAX;
+                        if (beginning_opt && end_opt) {
+                                WKPair *area = snippet_area(xi_tree, beginning_opt, end_opt);
+                                u = wk_box_get(area->x, size_t);
+                                v = wk_box_get(area->y, size_t);
+                                wk_box_free(area->x);
+                                wk_box_free(area->y);
+                                wk_pair_free(area);
+                        }
                         WKList *indents = wk_list(WKStr *);
                         for (size_t i = 0; i < entrances->n; i++) {
                                 WKStr *entrance = wk_array_get(entrances, i, WKStr *);
@@ -1984,9 +1992,6 @@ int main(int argc, char **argv) {
                                 wk_str_free(indent);
                         }
                         wk_list_free(indents);
-                        wk_box_free(area->x);
-                        wk_box_free(area->y);
-                        wk_pair_free(area);
                         for (size_t i = 0; i < entrances->n; i++) {
                                 wk_str_free(wk_array_get(entrances, i, WKStr *));
                                 wk_str_free(wk_array_get(outputs, i, WKStr *));

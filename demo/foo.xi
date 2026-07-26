@@ -1,20 +1,17 @@
-C 语言的 hello world 程序可以像下面这样逐步写出来。首先，需要包含标准库中的标准输入输出头文件：
+以下函数用于计算向量点积：
 
-@ hello world # [C]
-#include <stdio.h>
-@
-
-然后，编写程序的入口函数：
-
-@ hello world # +
-int main(void) {
-        # 在屏幕上打印 Hello world! @
-        return 0;
+@ 点积函数 # [C]
+int dot_product(double x[], double y[], int n) {
+        double sum = 0;
+        # n 维向量 x 与 y 的点积 @
+        return sum;
 }
 @
 
-最后，调用标准库的 `printf` 函数在屏幕上打印字符串 `"Hello world!"`：
+n 维向量点积计算过程如下：
 
-@ 在屏幕上打印 Hello world! #
-printf("Hello world!\n");
+@ n 维向量 x 与 y 的点积 #
+for (i = 0; i < n; i++) {
+        sum += x[i] * y[i];
+}
 @
