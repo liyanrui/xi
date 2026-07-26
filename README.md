@@ -75,7 +75,7 @@ $ xi -t -e "点积函数" -o foo.c foo.xi
 
 foo.c 文件的内容如下：
 
-```
+```c
 int dot_product(double x[], double y[], int n) {
         double sum = 0;
         for (i = 0; i < n; i++) {
@@ -175,7 +175,7 @@ $ xi -w -y -o foo.yml foo.xi
 
 foo.yml 内容如下：
 
-```
+```yaml
 - type: no-name
   content: |-
     '以下函数用于计算向量点积：
