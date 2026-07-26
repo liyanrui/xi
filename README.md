@@ -163,3 +163,18 @@ snippet_reference_id: /BTEX\ <\in[xi-${id}]>/ETEX
 snippet_reference_stop: "/BTEX\color[darkcyan]{@}/ETEX"
 snippet_emission: /BTEX=>\color[darkyellow]{${name}}<\in[xi-${id}]>/ETEX\n
 ```
+
+# YAML 输出
+
+倘若希望为 xi 编写面向排版的后端程序，可基于 xi 输出的 YAML 格式文件实现。将文学程序转化为 YAML 文档的命令如下：
+
+
+```console
+$ xi --weave --yaml --output foo.yml foo.xi
+```
+
+或者
+
+```console
+$ xi -w -y -o foo.yml foo.xi
+```
