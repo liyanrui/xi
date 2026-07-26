@@ -614,8 +614,8 @@ static WKList *xi_lexer(FILE *src_file, XISymbols *xi_symbols) {
                         if (prev) {
                                 XIToken *t_prev = wk_link_get(prev, XIToken *);
                                 if (t_prev->type != XI_SNIPPET_DELIMITER
-                                    || t_prev->type != XI_LANGUAGE_START_MARK
-                                    || t_prev->type != XI_TAG_START_MARK) {
+                                    && t_prev->type != XI_LANGUAGE_START_MARK
+                                    && t_prev->type != XI_TAG_START_MARK) {
                                         while (1) {
                                                 WKPair *snippet_reference
                                                         = find_snippet_reference(t->content,
@@ -1686,11 +1686,11 @@ static void snippet_with_name_to_yaml(WKBranch *x,
                         fprintf(output, "  tag: '%s'\n", y_token->content->body);
                         break;
                 case XI_SNIPPET_CONTENT:
+                        fprintf(output, "  content:\n");
                         for (size_t j = 0; j < y->lower->n; j++) {
                                 WKBranch *z = wk_array_get(y->lower, j, WKBranch *);
                                 XISyntax *z_syntax = wk_branch_get(z, XISyntax *);
                                 XIToken *z_token = wk_link_get(z_syntax->tokens->head, XIToken *);
-                                fprintf(output, "  content:\n");
                                 if (z_syntax->type == XI_SNIPPET_TEXT) {
                                         fprintf(output, "    - type: text\n"
                                                         "      data: |-\n"
@@ -1700,8 +1700,7 @@ static void snippet_with_name_to_yaml(WKBranch *x,
                                 } else {
                                         WKStr *key = compact_text(z_token->content);
                                         WKBox *tie_box = wk_table_query(relations, wk_box_ref(key, WKStr *));
-                                        fprintf(output, "    - type: snippet-reference\n"
-                                                        "      data:\n");
+                                        fprintf(output, "    - type: snippet-reference\n");
                                         if (tie_box) {
                                                 XITie *tie = wk_box_get(tie_box, XITie *);
                                                 fprintf(output, "      name: |-\n"
