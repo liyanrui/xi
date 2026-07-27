@@ -201,14 +201,14 @@ static WKStr *extract_block_at_head(XIToken *t,
                 case IDLE:
                         if (*p == '\n') new_line_number++;
                         else if (here_is_me(a, b, p, 1, start_mark)) {
-				block_start = p;
-				p += (m - 1);
+                                block_start = p;
+                                p += (m - 1);
                                 state = MAYBE_MARK;
                         } else state = FAILURE;
                         break;
                 case MAYBE_MARK:
                         if (here_is_me(a, b, p, 1, stop_mark)) {
-				p += (n - 1);
+                                p += (n - 1);
                                 block_stop = p + 1;
                                 state = SUCCESS;
                         } else state = MAYBE_MARK;
