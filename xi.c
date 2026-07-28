@@ -1858,6 +1858,7 @@ int main(int argc, char **argv) {
                 fprintf(stdout, "%-16s  %s\n", "",                "extraction range.");
                 fprintf(stdout, "%-16s  %s\n", "--weave, -w",     "build the typeset documentation of the literate");
                 fprintf(stdout, "%-16s  %s\n", "",                "program.");
+                fprintf(stdout, "%-16s  %s\n", "--yaml, -y",      "enable yaml output.");
                 fprintf(stdout, "%-16s  %s\n", "--config, -c",   "specify the path to the xi configuration file.");
                 fprintf(stdout, "%-16s  %s\n", "--output, -o",   "set the output file name or path for xi.");
                 fprintf(stdout, "%-16s  %s\n", "--help, -h",     "display this help and exit.");
