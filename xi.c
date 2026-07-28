@@ -1932,7 +1932,7 @@ int main(int argc, char **argv) {
                         wk_str_replace(xi_fmt->snippet_appending_operator, "\\n", "\n");
                         wk_str_replace(xi_fmt->snippet_prepending_operator, "\\n", "\n");
                 }
-                FILE *src_file = fopen(src_file_path, "r");
+                FILE *src_file = src_file_path ? fopen(src_file_path, "r") : stdin;
                 if (!src_file) {
                 	fprintf(stderr, "Failed to open %s\n", src_file_path);
                 	exit(EXIT_FAILURE);
