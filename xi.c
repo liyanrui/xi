@@ -181,9 +181,7 @@ static const char *find_name_delimiter(XIToken *t,
         }
         return (state == SUCCESS) ? b : NULL;
 }
-static WKStr *extract_block_at_head(XIToken *t,
-					  WKStr *start_mark,
-					  WKStr *stop_mark)
+static WKStr *extract_block_at_head(XIToken *t, WKStr *start_mark, WKStr *stop_mark)
 {
         WKStr *result = NULL;
         const char *block_start = NULL;
@@ -932,54 +930,54 @@ static WKStr *compact_text(WKStr *a) {
         return b;
 }
 static void init_tie(WKTable *relations, WKBranch *x) {
-        WKStr *name = NULL;
+        WKStr *x_name = NULL;
         for (size_t i = 0; i < x->lower->n; i++) {
-                WKBranch *p = wk_array_get(x->lower, i, WKBranch *);
-                XISyntax *a = wk_branch_get(p, XISyntax *);
-                if (a->type == XI_SNIPPET_NAME) {
-                        XIToken *t = wk_link_get(a->tokens->head, XIToken *);
-                        name = t->content;
+                WKBranch *y = wk_array_get(x->lower, i, WKBranch *);
+                XISyntax *y_syntax = wk_branch_get(y, XISyntax *);
+                if (y_syntax->type == XI_SNIPPET_NAME) {
+                        XIToken *x_name_token = wk_link_get(y_syntax->tokens->head, XIToken *);
+                        x_name = x_name_token->content;
                         break;
                 }
         }
-        if (!name) {
+        if (!x_name) {
                 fprintf(stderr, "Line %lu: Illegal snipet.\n", first_token_line_number(x));
                 exit(EXIT_FAILURE);
         }
-        WKStr *key = compact_text(name);
+        WKStr *key = compact_text(x_name);
         WKBox *tie_box = wk_table_query(relations, wk_box_ref(key, WKStr *));
         if (tie_box) {
                 XITie *tie = wk_box_get(tie_box, XITie *);        
                 bool has_appending_operator = false;
                 bool has_prepending_operator = false;
-                WKStr *tag_reference = NULL;
+                WKStr *tag_ref = NULL;
                 for (size_t i = 0; i < x->lower->n; i++) {
-                        WKBranch *p = wk_array_get(x->lower, i, WKBranch *);
-                        XISyntax *a = wk_branch_get(p, XISyntax *);
-                        if (a->type == XI_SNIPPET_TAG_REFERENCE) {
-                                XIToken *t_a = wk_link_get(a->tokens->head, XIToken *);
-                                tag_reference = t_a->content;
+                        WKBranch *y = wk_array_get(x->lower, i, WKBranch *);
+                        XISyntax *y_syntax = wk_branch_get(y, XISyntax *);
+                        if (y_syntax->type == XI_SNIPPET_TAG_REFERENCE) {
+                                XIToken *tag_ref_token = wk_link_get(y_syntax->tokens->head, XIToken *);
+                                tag_ref = tag_ref_token->content;
                         }
-                        if (a->type == XI_SNIPPET_APPENDING_OPERATOR) {
+                        if (y_syntax->type == XI_SNIPPET_APPENDING_OPERATOR) {
                                 has_appending_operator = true;
                                 break;
                         }
-                        if (a->type == XI_SNIPPET_PREPENDING_OPERATOR) {
+                        if (y_syntax->type == XI_SNIPPET_PREPENDING_OPERATOR) {
                                 has_prepending_operator = true;
                                 break;
                         }
                 }
-                if (tag_reference) {
-                        WKStr *t = compact_text(tag_reference);
+                if (tag_ref) {
+                        WKStr *t = compact_text(tag_ref);
                         int id = -1;
                         size_t hits = 0;
                         for (int i = 0; i < tie->time_order->n; i++) {
                                 WKBranch *y = wk_array_get(tie->time_order, i, WKBranch *);
                                 for (size_t j = 0; j < y->lower->n; j++) {
-                                        WKBranch *p = wk_array_get(y->lower, j, WKBranch *);
-                                        XISyntax *a = wk_branch_get(p, XISyntax *);
-                                        if (a->type == XI_SNIPPET_TAG) {
-                                                XIToken *tag_token = wk_link_get(a->tokens->head, XIToken *);
+                                        WKBranch *z = wk_array_get(y->lower, j, WKBranch *);
+                                        XISyntax *z_syntax = wk_branch_get(z, XISyntax *);
+                                        if (z_syntax->type == XI_SNIPPET_TAG) {
+                                                XIToken *tag_token = wk_link_get(z_syntax->tokens->head, XIToken *);
                                                 WKStr *s = compact_text(tag_token->content);
                                                 if (strcmp(s->body, t->body) == 0) {
                                                         id = i;
@@ -1020,15 +1018,14 @@ static void init_tie(WKTable *relations, WKBranch *x) {
                 }
                 wk_array_add(tie->spatial_order, x, WKBranch *);
                 wk_str_free(key);
-        } else {
+        } else { /* 将 x 添加至 relations */
                 XITie *tie = malloc(sizeof(XITie));
                 tie->time_order = wk_array(WKBranch *);
                 tie->spatial_order = wk_array(WKBranch *);
                 tie->emissions = wk_array(WKBranch *);
                 wk_array_add(tie->time_order, x, WKBranch *);
                 wk_array_add(tie->spatial_order, x, WKBranch *);
-                wk_table_add(relations, wk_pair(wk_box(key, WKStr *),
-                                                wk_box(tie, XITie *)));
+                wk_table_add(relations, wk_pair(wk_box(key, WKStr *), wk_box(tie, XITie *)));
         }
 }
 static void create_relation(WKTable *relations,
