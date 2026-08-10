@@ -1136,8 +1136,10 @@ static WKStr *last_blank_line(XISyntax *a) {
                 const char *tail = u->body + u->n;
                 const char *p = tail;
                 p = xi_skip(head, tail, p, -1, xi_skipped_chars);
-                for (const char *q = p; *q != '\0'; q++) {
-                        wk_str_suffix_char(blank_line, *q);
+                if (p != head && *(p - 1) == '\n') {
+                        for (const char *q = p; *q != '\0'; q++) {
+                                wk_str_suffix_char(blank_line, *q);
+                        }
                 }
         }
         return blank_line;
@@ -1207,6 +1209,7 @@ static void xi_tangle(const char *xi_file_path,
                                 /* 去尾 */
                                 tail = xi_skip(head, tail, tail, -1, xi_skipped_chars);
                                 if (*(tail - 1) == '\n') tail--;
+                                else tail = text->body + text->n;
                                 /* 有时会出现片段内容为空行的情况，此时 head > tail，需要排除这种情况 */
                                 if (head < tail) {
                                         /* 由于掐头的原因，首行要添加缩进 */
