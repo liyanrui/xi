@@ -1556,20 +1556,20 @@ static void output_snippet_with_name(WKBranch *x, WKTable *relations, FILE *outp
                 default: ;
                 }
         }
-        WKStr *x_key = compact_text(x_name, xi_skipped_chars_in_snippet_name);
-        WKBox *tie_box = wk_table_query(relations, wk_box_ref(x_key, WKStr *));
-        if (tie_box) {
-                XITie *tie = wk_box_get(tie_box, XITie *);
-                if (tie->emissions->n > 0) {
-                        WKStr *e_id = wk_str(NULL);
-                        for (size_t i = 0; i < tie->emissions->n; i++) {
-                                WKBranch *e = wk_array_get(tie->emissions, i, WKBranch *);
-                                XISyntax *e_syntax = wk_branch_get(e, XISyntax *);
-                                WKBranch *e_name_branch = wk_array_get(e->lower, 0, WKBranch *);
-                                XISyntax *e_name = wk_branch_get(e_name_branch, XISyntax *);
-                                XIToken *e_name_token = wk_link_get(e_name->tokens->head, XIToken *);
-                                wk_str_printf(e_id, "%lu", e_syntax->id);
-                                if (xi_fmt->snippet_emission->n > 0) {
+        if (xi_fmt->snippet_emission->n > 0) {
+                WKStr *x_key = compact_text(x_name, xi_skipped_chars_in_snippet_name);
+                WKBox *tie_box = wk_table_query(relations, wk_box_ref(x_key, WKStr *));
+                if (tie_box) {
+                        XITie *tie = wk_box_get(tie_box, XITie *);
+                        if (tie->emissions->n > 0) {
+                                WKStr *e_id = wk_str(NULL);
+                                for (size_t i = 0; i < tie->emissions->n; i++) {
+                                        WKBranch *e = wk_array_get(tie->emissions, i, WKBranch *);
+                                        XISyntax *e_syntax = wk_branch_get(e, XISyntax *);
+                                        WKBranch *e_name_branch = wk_array_get(e->lower, 0, WKBranch *);
+                                        XISyntax *e_name = wk_branch_get(e_name_branch, XISyntax *);
+                                        XIToken *e_name_token = wk_link_get(e_name->tokens->head, XIToken *);
+                                        wk_str_printf(e_id, "%lu", e_syntax->id);
                                         WKStr *e_fmt = wk_str(xi_fmt->snippet_emission->body);
                                         wk_str_replace(e_fmt,
                                                        "${name}",
@@ -1578,11 +1578,11 @@ static void output_snippet_with_name(WKBranch *x, WKTable *relations, FILE *outp
                                         fprintf(output, "%s", e_fmt->body);
                                         wk_str_free(e_fmt);
                                 }
+                                wk_str_free(e_id);
                         }
-                        wk_str_free(e_id);
                 }
+                wk_str_free(x_key);
         }
-        wk_str_free(x_key);
         if (xi_fmt->snippet_stop->n > 0) {
                 XIToken *language = find_language_token(x);
                 WKStr *a = wk_str(xi_fmt->snippet_stop->body);
