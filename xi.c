@@ -316,8 +316,8 @@ static WKPair *find_snippet_reference(WKStr *content)
         while (1) {
                 begin = strstr(a, reference_start_mark->body);
                 if (!begin) return NULL;
-                end = strstr(a, reference_stop_mark->body);
-                if (!end || begin >= end) return NULL;
+                end = strstr(begin + 1, reference_stop_mark->body);
+                if (!end) return NULL;
                 /*区间 [c, p) 是片段名 */
                 const char *p = end;
                 const char *c = begin + reference_start_mark->n;
