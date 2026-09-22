@@ -1331,34 +1331,49 @@ WKArray *snippet_name_split(WKStr *name) {
         WKStr *continuation = xi_symbols->snippet_name_continuation;
         WKArray *segments = wk_array(WKStr *);
         WKStr *a = wk_str(NULL);
-        WKStr *b = NULL;
+        WKStr *b = wk_str(NULL);
         const char *p = name->body;
         const char *q = name->body + name->n;
         WKStr *quad = wk_str("　");
-        enum {INIT, WHITE_AREA} state = INIT;
+        enum {INIT, MAYBE_WHITE_AREA, WHITE_AREA} state = INIT;
         while (1) {
                 if (*p == '\0') break;
                 switch (state) {
                 case INIT:
-                        if (strstr(p, continuation->body) == p) {
+                        if (here_is_me(p, q, p, 1, continuation)) {
                                 p += continuation->n - 1;
-                                wk_array_add(segments, a, WKStr *);
-                                a = wk_str(NULL);
-                                b = wk_str(NULL);
                                 wk_str_suffix(b, continuation->body);
-                                state = WHITE_AREA;
+                                state = MAYBE_WHITE_AREA;
                         } else {
                                 wk_str_suffix_char(a, *p);
                         }
                         break;
+                case MAYBE_WHITE_AREA:
+                        if (*p == ' ' || *p == '\t') {
+                                wk_str_suffix_char(b, *p);
+                        } else if (here_is_me(p, q, p, 1, quad)) {
+                                wk_str_suffix(b, quad->body);
+                        } else if (*p == '\n') {
+                                wk_str_suffix_char(b, *p);
+                                wk_array_add(segments, a, WKStr *);
+                                a = wk_str(NULL);
+                                state = WHITE_AREA;
+                        } else {
+                                wk_str_suffix_char(b, *p);
+                                wk_str_suffix(a, b->body);
+                                b = wk_str(NULL);
+                                state = INIT;
+                        }
+                        break;
                 case WHITE_AREA:
-                        if (*p == '\n' || *p == ' ' || *p == '\t') {
+                        if (*p == ' ' || *p == '\t') {
                                 wk_str_suffix_char(b, *p);
                         } else if (here_is_me(p, q, p, 1, quad)) {
                                 wk_str_suffix(b, quad->body);
                         } else {
-                                wk_array_add(segments, b, WKStr *);
                                 wk_str_suffix_char(a, *p);
+                                wk_array_add(segments, b, WKStr *);
+                                b = wk_str(NULL);
                                 state = INIT;
                         }
                         break;
@@ -1368,6 +1383,8 @@ WKArray *snippet_name_split(WKStr *name) {
                 }
                 p++;
         }
+        if (b->n > 0) wk_str_suffix(a, b->body);
+        wk_str_free(b);
         if (a->n > 0) wk_array_add(segments, a, WKStr *);
         else wk_str_free(a);
         wk_str_free(quad);
