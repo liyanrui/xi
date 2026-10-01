@@ -177,7 +177,7 @@ static const char *find_name_delimiter(XIToken *t) {
                         } else state = FAILURE;
                         break;
                 default:
-			fprintf(stderr, "Illegal state in line %lu", t->line_number);
+			fprintf(stderr, "Illegal state in line %lu\n", t->line_number);
                 }
                 if (state == FAILURE || state == SUCCESS) break;
         }
@@ -214,7 +214,7 @@ static WKStr *extract_block_at_head(XIToken *t, WKStr *start_mark, WKStr *stop_m
                         } else state = MAYBE_MARK;
                         break;
                 default:
-                        fprintf(stderr, "Illegal state in line %lu.", t->line_number);
+                        fprintf(stderr, "Illegal state in line %lu.\n", t->line_number);
                 }
                 if (state == SUCCESS) { /* 从记号内容里消除块标记 */
                         result = wk_str(NULL);
@@ -338,7 +338,7 @@ static WKPair *find_snippet_reference(WKStr *content)
                                 } else state = FAILURE;
                                 break;
                         default:
-                                fprintf(stderr, "Illegal state in <<< %s >>>.", a);
+                                fprintf(stderr, "Illegal state in <<< %s >>>.\n", a);
                         }
                         if (state == FAILURE) {
                                 legal = false;
@@ -976,7 +976,7 @@ static void init_tie(WKTable *relations, WKBranch *x) {
                                 exit(EXIT_FAILURE);
                         }
                         if (id < 0) {
-                                fprintf(stderr, "Line %lu: The referenced tag does not exist.", first_token_line_number(x));
+                                fprintf(stderr, "Line %lu: The referenced tag does not exist.\n", first_token_line_number(x));
                                 exit(EXIT_FAILURE);
                         }
                         if (has_appending_operator) {
@@ -984,7 +984,7 @@ static void init_tie(WKTable *relations, WKBranch *x) {
                         } else if (has_prepending_operator) {
                                 wk_array_ins(tie->time_order, id, x, WKBranch *);
                         } else {
-                                fprintf(stderr, "Line %lu: The snippet needs an operator.",
+                                fprintf(stderr, "Line %lu: The snippet needs an operator.\n",
                                                 first_token_line_number(x));
                                 exit(EXIT_FAILURE);
                         }
@@ -995,7 +995,7 @@ static void init_tie(WKTable *relations, WKBranch *x) {
                         } else if (has_prepending_operator) {
                                 wk_array_ins(tie->time_order, 0, x, WKBranch *);
                         } else {
-                                fprintf(stderr, "Line %lu: The snippet needs an operator.",
+                                fprintf(stderr, "Line %lu: The snippet needs an operator.\n",
                                                 first_token_line_number(x));
                                 exit(EXIT_FAILURE);
                         }
@@ -1021,7 +1021,7 @@ static void create_relation(WKTable *relations, WKBranch *x, XISyntax *a)
                 XITie *tie = wk_box_get(tie_box, XITie *);
                 wk_array_add(tie->emissions, x, WKBranch *);
         } else {
-                fprintf(stderr, "Line %lu: The snippet named <%s> not existed.",
+                fprintf(stderr, "Line %lu: The snippet named <%s> not existed.\n",
                                 t->line_number, t->content->body);
                 exit(EXIT_FAILURE);
         }
@@ -1155,7 +1155,7 @@ static void xi_tangle(const char *xi_file_path,
         WKStr *key = compact_text(entrance, xi_skipped_chars_in_snippet_name);
         WKBox *tie_box = wk_table_query(relations, wk_box_ref(key, WKStr *));
         if (!tie_box) {
-                fprintf(stderr, "Snippet <%s> never existed!", entrance->body);
+                fprintf(stderr, "Snippet <%s> never existed!\n", entrance->body);
 		exit(EXIT_FAILURE);
         }
 	XITie *tie = wk_box_get(tie_box, XITie *);
@@ -1248,7 +1248,7 @@ static void get_thread(WKTable *relations, WKStr *entrance, WKList *thread) {
         WKStr *key = compact_text(entrance, xi_skipped_chars_in_snippet_name);
         WKBox *tie_box = wk_table_query(relations, wk_box_ref(key, WKStr *));
         if (!tie_box) {
-                fprintf(stderr, "Snippet <%s> never existed!", entrance->body);
+                fprintf(stderr, "Snippet <%s> never existed!\n", entrance->body);
 		exit(EXIT_FAILURE);
         }
         XITie *tie = wk_box_get(tie_box, XITie *);
@@ -1283,7 +1283,7 @@ static void spread_language_mark_in_thread(WKTree *xi_tree, WKList *thread) {
                         if (strcmp(language_token->content->body,
                                    language_token_a->content->body) != 0) {
                                 fprintf(stderr, "Line %lu and %lu: "
-                                                "there are two different language marks.",
+                                                "there are two different language marks.\n",
                                                 language_token->line_number,
                                                 language_token_a->line_number);
                         }
@@ -1952,7 +1952,7 @@ int main(int argc, char **argv) {
                                 }
                         }
                         if (entrances->n != outputs->n) {
-                                fprintf(stderr, "Illegal output!");
+                                fprintf(stderr, "Illegal output!\n");
                                 exit(EXIT_FAILURE);
                         }
                         size_t u = 0;
