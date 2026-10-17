@@ -160,6 +160,23 @@ void foobar(void) {
 
 \noindent 上述示例中，第二个有名片段首部之后的 \type{<tag>} 便是该有名片段的标签。第三个有名片段首部之后的运算符 \type{^+} 之前的 \type{<tag>}，表示当前的有名片段需要合并至带有该标签的同名片段之前。注意，有名片段的标签需要具备唯一性，亦即 xi 不允许两个同名片段使用相同标签。
 
+\subsection{同名片段切片}
+
+在一个有名片段的内容中引用另一个有名片段时，后者可能是多个同名片段构成的集合，可以在片段引用之后设定该集合的切片，即只引用该集合内的一个子集。切片范围基于片段标签构造，例如
+
+\starttyping
+@ 点积 #
+int dot_product(double x[], double y[], int n) {
+        int i;
+        double sum;
+        # 计算 x 与 y 的点积 @ [<a>, <b>];
+        return sum;
+}
+@
+\stoptyping
+
+\noindent \type{<a>} 和 \type{<b>} 分别为两个同名片段的标签，二者及其之间的其他同名片段构成切片。需要注意的是，有名片段引用之后的同一行内容会被忽略，故而同名片段切片也不会显示在文学程序编织而成的文档里。为了简化同名片段切片的构造，以 0 表示同名片段集合中的首个片段，\type{here} 表示同名片段集合中位于片段引用者之前最后一个片段。
+
 \subsection[lang-mark]{编程语言}
 
 尽管 xi 所支持的文学编程独立于任何编程语言，但是在文档排版过程中为了实现有名片段的高亮渲染，需要知道有名片段所用的编程语言，可在有名片段的首部的特定位置放置一个标记表示该片段所用编程语言，例如
@@ -173,13 +190,7 @@ void foobar(void) {
 
 \noindent 标记 \type{[C]} 表示有名片段所用的编程语言为 C 语言。
 
-编程语言标记位于有名片段首部之后，可在引用标签之前，也可在其之后，但必须位于累加运算符之前。以下有名片段示例给出了 xi 默认所需的全部符号和标记：
-
-\starttyping
-@ 有名片段名 # [编程语言] <标签引用> + 或 ^+
-<标签>
-... 有名片段的内容 ...
-\stoptyping
+编程语言标记位于有名片段首部之后，可在引用标签之前，也可在其之后，但必须位于累加运算符之前。
 
 每一个有名片段都需要编程语言标记吗？当然不是。假设一个带有语言标记的有名片段 $X$，xi 能够将该语言标记自动传播给 1) 与 $X$ 同名的有名片段，2) 被 $X$ 引用的有名片段，3) 引用 $X$ 的有名片段。语言标记是可选的。遇到为提供语言标记的有名片段，xi 会给出警告。
 
@@ -198,10 +209,10 @@ typedef struct {
         size_t line_number;
         WKStr *content;
 } XIToken;
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-41]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-44]>/ETEX
 \stopC
 
-\noindent 其中 \type{type} 字段表示记号类型，以下类型覆盖了 xi 所支持的文学编程的所有记号：
+ \noindent 其中 \type{type} 字段表示记号类型，以下类型覆盖了 xi 所支持的文学编程的所有记号：
 
 \startC
 /BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 记号 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-2]{2}\inoutermargin{\darkred{2}}/ETEX/BTEX\ \color[darkgreen]{\bf $\wedge+$}\ /ETEX
@@ -216,9 +227,11 @@ typedef enum {
         XI_TAG_STOP_MARK, /* 有名片段标签终结符 */
         XI_SNIPPET_REFERENCE_START_MARK, /* 有名片段引用开始符 */
         XI_SNIPPET_REFERENCE_STOP_MARK, /* 有名片段引用终结符 */
+        XI_SNIPPET_SLICE_START_MARK, /* 有名片段切片起始位置（0, here 或片段标签） */
+        XI_SNIPPET_SLICE_STOP_MARK,  /* 有名片段切片终止位置（here 或片段标签） */
         XI_TEXT /* 普通文本 */
 } XITokenType;
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-41]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-44]>/ETEX
 \stopC
 
 \noindent 记号结构里的 \type{line_number} 和 \type{content} 字段分别记录了记号所在行号（从 1 开始，若记号跨多行，则记录其首行行号）和内容。
@@ -239,10 +252,12 @@ typedef struct {
         WKStr *tag_stop_mark;
         WKStr *snippet_reference_start_mark;
         WKStr *snippet_reference_stop_mark;
+        WKStr *snippet_slice_start_mark;
+        WKStr *snippet_slice_stop_mark;
 } XISymbols;
 
 XISymbols *xi_symbols;
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-41]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-44]>/ETEX
 \stopC
 
 \noindent 全局变量 \type{xi_symbols} 表示 xi的符号集，需要将其初始化为 xi 默认符号：
@@ -261,9 +276,11 @@ xi_symbols = malloc(sizeof(XISymbols));
         .tag_start_mark = wk_str("<"),
         .tag_stop_mark = wk_str(">"),
         .snippet_reference_start_mark = wk_str("#"),
-        .snippet_reference_stop_mark = wk_str("@")
+        .snippet_reference_stop_mark = wk_str("@"),
+        .snippet_slice_start_mark = wk_str("["),
+        .snippet_slice_stop_mark = wk_str("]")
 };
-/BTEX=>\color[darkyellow]{ xi 核心过程 }<\in[xi-125]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 核心过程 }<\in[xi-127]>/ETEX
 \stopC
 
 \noindent 若用户未通过 xi 配置文件提供自定义符号，则词法分析过程会默认使用 \type{xi_symbols} 的初始值作为 xi 文学编程符号。
@@ -281,7 +298,7 @@ snippet_reference_stop_mark: 」
 /BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 外境 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-5]{5}\inoutermargin{\darkred{5}}/ETEX
 /* 该头文件已包含 wk-str.h, wk-array.h, wk-list.h, wk-table.h 等 */
 #include <wk-cfg.h>
-/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-129]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-131]>/ETEX
 \stopC
 
 WKCfg 模块依赖 WKStr（字符串模块）、WKArray（动态数组模块）、WKList（双向链表模块）以及 WKTable（散列表模块），后面这些模块也皆为 xi 所需，后者的头文件皆已被 wi-cfg.h 包含。
@@ -304,8 +321,10 @@ if (user_config) {
         XI_USER_CONFIG(user_config, xi_symbols, tag_stop_mark);
         XI_USER_CONFIG(user_config, xi_symbols, snippet_reference_start_mark);
         XI_USER_CONFIG(user_config, xi_symbols, snippet_reference_stop_mark);
+        XI_USER_CONFIG(user_config, xi_symbols, snippet_slice_start_mark);
+        XI_USER_CONFIG(user_config, xi_symbols, snippet_slice_stop_mark);
 }
-/BTEX=>\color[darkyellow]{ xi 核心过程 }<\in[xi-125]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 核心过程 }<\in[xi-127]>/ETEX
 \stopC
 
 \noindent 配置文件的解析结果 \type{user_config} 是一个散列表。上述代码所用的宏 \type{XI_USER_CONFIG} 可从 \type{user_config} 中查询相应的符号，并予以替换：
@@ -319,7 +338,7 @@ if (user_config) {
                 xi_symbols->item = wk_str(wk_box_get(v, WKStr *)->body); \
         } \
 } while (0)
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-41]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-44]>/ETEX
 \stopC
 
 \noindent 上述宏定义里，\type{#item} 表示给 \type{item} 的值添加双引号，使之成为 C 字符串常量。
@@ -340,8 +359,10 @@ wk_str_free(xi_symbols->tag_start_mark);
 wk_str_free(xi_symbols->tag_stop_mark);
 wk_str_free(xi_symbols->snippet_reference_start_mark);
 wk_str_free(xi_symbols->snippet_reference_stop_mark);
+wk_str_free(xi_symbols->snippet_slice_start_mark);
+wk_str_free(xi_symbols->snippet_slice_stop_mark);
 free(xi_symbols);
-/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-129]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-131]>/ETEX
 \stopC
 
 通过上述内容，你大致应该熟悉了文学编程的基本思路。每个代码片段，就像有一些接线的小型电路板块，文字内容则主要描述该板块的功能或一些设计上的细节。只要小心地将这些小型电路板块连接起来，便可得到完整的程序。不同代码片段之间的连接关系是建立在一些公共的变量上的，亦即这些变量像是电路板的接线。
@@ -357,7 +378,7 @@ if (!xi_file) {
 	fprintf(stderr, "Failed to open %s\n", xi_file_path);
 	exit(EXIT_FAILURE);
 }
-/BTEX=>\color[darkyellow]{ xi 核心过程 }<\in[xi-125]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 核心过程 }<\in[xi-127]>/ETEX
 \stopC
 
 在 xi 进程退出前，关闭文件：
@@ -365,7 +386,7 @@ if (!xi_file) {
 \startC
 /BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi 进程资源回收 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-10]{10}\inoutermargin{\darkred{10}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
 fclose(xi_file);
-/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-129]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-131]>/ETEX
 \stopC
 
 在读取文学程序文件的过程中，需要一个缓冲区临时存储读入的字符。辅助函数 \type{read_char} 可从文件中读取当前字符（一个字节），将其存入缓冲区。
@@ -379,7 +400,7 @@ static int read_char(FILE *xi_file, WKStr *cache) {
                 return c;
         } else return EOF;
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-41]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-44]>/ETEX
 \stopC
 
 \subsection{分段}
@@ -405,7 +426,7 @@ static bool tail_is_snippet_delimiter(WKStr *cache) {
         if (p == a) return true;
         else return (*(p - 1) == '\n') ? true : false;
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-41]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-44]>/ETEX
 \stopC
 
 \noindent \type{xi_skip} 可以在字符串区间 \type{[a, b)} 中移动 \type{c}，令其根据方向 \type{dir} 跳过所有属于 \type{xi_skipped_chars} 的字符，并返回其终值。\type{dir} 小于 0 表示向 \type{a} 的方向移动，否则向 \type{b} 的方向移动，倘若无法移动，则返回 \type{c} 的原值。该函数实现如下：
@@ -432,7 +453,7 @@ static const char *xi_skip(const char *a, const char *b,
         }
         return pos;
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-41]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-44]>/ETEX
 \stopC
 
 全局变量 \type{xi_skipped_chars} 存储了可用于 \type{xi_skip} 函数的空白字符集，其定义、初始化和回收过程如下：
@@ -440,7 +461,7 @@ static const char *xi_skip(const char *a, const char *b,
 \startC
 /BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 全局变量 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-14]{14}\inoutermargin{\darkred{14}}/ETEX
 WKArray *xi_skipped_chars; /* xi 空白字符集 */
-/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-129]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-131]>/ETEX
 \stopC
 
 \startC
@@ -449,7 +470,7 @@ xi_skipped_chars = wk_array(WKStr *);
 wk_array_add(xi_skipped_chars, wk_str(" "), WKStr *);
 wk_array_add(xi_skipped_chars, wk_str("\t"), WKStr *);
 wk_array_add(xi_skipped_chars, wk_str("　"), WKStr *);
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-41]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-44]>/ETEX
 \stopC
 
 \startC
@@ -459,7 +480,7 @@ for (size_t i = 0; i < xi_skipped_chars->n; i++) {
         wk_str_free(s);
 }
 wk_array_free(xi_skipped_chars);
-/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-129]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-131]>/ETEX
 \stopC
 
 若 \type{tail_is_snippet_delimiter} 返回 \type{true}，即缓冲区尾部是片段界限符，则将其移除：
@@ -484,7 +505,7 @@ static void add_snippet(WKList *tokens, WKStr *cache) {
         snippet->content = cache;
         wk_list_suffix(tokens, snippet, XIToken *);
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-41]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-44]>/ETEX
 \stopC
 
 \noindent 缓冲区内的文本（当前记号）在文件中的行号需基于记号列表 \type{tokens} 的尾节点对应的行号以及该节点存储的文本行数予以确定：
@@ -517,7 +538,7 @@ static void add_snippet_delimiter(WKList *tokens) {
         snippet->content = wk_str(snippet_delimiter->body);
         wk_list_suffix(tokens, snippet, XIToken *);
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-41]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-44]>/ETEX
 \stopC
 
 对文学程序文件 \type{xi_file} 分段，将结果保存于记号类表 \type{xi_tokens}，该过程如下：
@@ -544,7 +565,7 @@ if (cache->n > 0) {
         /* 以片段界限符作为记号列表的结尾，便于在语法树的构造过程中析取片段内容 */
         add_snippet_delimiter(xi_tokens);
 } else wk_str_free(cache);
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-41]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-44]>/ETEX
 \stopC
 
 \subsection{片段名}
@@ -590,7 +611,7 @@ static const char *find_name_delimiter(XIToken *t) {
         }
         return (state == SUCCESS) ? b : NULL;
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-41]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-44]>/ETEX
 \stopC
 
 \noindent 上述代码所用的辅助函数 \type{here_is_me} 用于在区间 \type{[a, b)} 内判断以 \type{here} 为起始位置的一段子串是否与 \type{me} 相同。\type{dir} 表示 \type{here} 的取向，若 \type{dir} 为负值，则子串是 \type{[here - n + 1, here]}，否则是 \type{[here, here + n - 1]}，\type{n} 为 \type{me} 的长度。
@@ -605,7 +626,7 @@ static bool here_is_me(const char *a, const char *b,
         if (p + n > b) return false;
         return memcmp(me->body, p, n) == 0 ? true : false;
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-41]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-44]>/ETEX
 \stopC
 
 若 \type{find_name_delimiter} 发现符合规则的片段名字界限符则返回界限符首地址，否则返回 \type{NULL}。需要注意的是，若界限符之前皆为空白字符，\type{find_name_delimiter} 依然会认定为界限符合乎规则，即片段名字为空白字串。
@@ -642,7 +663,7 @@ while (it) {
         }
         it = it->next;
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-41]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-44]>/ETEX
 \stopC
 
 \noindent 在上述代码中，基于 \type{p} 分割记号 \type{t} 的过程如下：
@@ -681,18 +702,50 @@ snippet->content = cache;
 
 \subsection{语言标记}
 
-假设记号 \type{t}，其类型为 \type{XI_TEXT} 且其前一个记号类型为 \type{XI_SNIPPET_NAME_DELIMITER}，则该记号内容的首部可能存在编程语言标记、标签以及标签引用，这些元素的共同点是皆有起止符号，针对它们的析取过程皆依赖于以下辅助函数：
+假设记号 \type{t}，其类型为 \type{XI_TEXT} 且其前一个记号类型为 \type{XI_SNIPPET_NAME_DELIMITER}，则该记号内容的首部可能存在编程语言标记、标签以及标签引用，针对它们的析取过程皆依赖于以下辅助函数：
 
 \startC
 /BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 词法分析阶段的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-26]{26}\inoutermargin{\darkred{26}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
-static WKStr *extract_block_at_head(XIToken *t, WKStr *start_mark, WKStr *stop_mark)
-{
+
+/BTEX\color[darkmagenta]{<extract_block>}/ETEX
+static WKStr *extract_block(XIToken *t, WKStr *start_mark, WKStr *stop_mark) {
         WKStr *result = NULL;
+        WKPair *block = find_block(t->content, start_mark, stop_mark);
+        if (block) { /* 从记号内容里消除块标记 */
+                const char *start = wk_box_get(block->x, const char *);
+                const char *stop = wk_box_get(block->y, const char *);
+                /* 更新行号 */
+                size_t new_line_number = t->line_number;
+                for (const char *p = start; p != stop; p++) {
+                        if (*p == '\n') new_line_number++;
+                }
+                /* 获取块之后的内容 */
+                WKStr *new_content = wk_str(NULL);
+                for (const char *p = stop + stop_mark->n; *p != '\0'; p++) {
+                        wk_str_suffix_char(new_content, *p);
+                }
+                /* 获取块内容 */
+                result = get_block(t->content, block);
+                /* 更新 t */
+                wk_str_free(t->content);
+                t->line_number = new_line_number;
+                t->content = new_content;
+        }
+        return result;
+}
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-44]>/ETEX
+\stopC
+
+\noindent \type{extract_block} 返回记号 \type{t} 首部的块标记的内容部分，若 \type{t} 的首部未出现块标记，则返回 \type{NULL}。上述代码所用的辅助函数 \type{find_block} 定义如下：
+
+\startC
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 词法分析阶段的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-27]{27}\inoutermargin{\darkred{27}}/ETEX/BTEX\color[darkmagenta]{\ <extract_block>\ }/ETEX/BTEX\ \color[darkgreen]{\bf $\wedge+$}\ /ETEX
+static WKPair *find_block(WKStr *content, WKStr *start_mark, WKStr *stop_mark) {
+        WKPair *result = NULL;
         const char *block_start = NULL;
         const char *block_stop = NULL;
-        size_t new_line_number = t->line_number;
-        const char *a = t->content->body;
-        const char *b = a + t->content->n;
+        const char *a = content->body;
+        const char *b = a + content->n;
         const char *p = a;
         size_t m = start_mark->n;
         size_t n = stop_mark->n;
@@ -701,12 +754,12 @@ static WKStr *extract_block_at_head(XIToken *t, WKStr *start_mark, WKStr *stop_m
                 p = xi_skip(a, b, p, 1, xi_skipped_chars);
                 switch (state) {
                 case IDLE:
-                        if (*p == '\n') new_line_number++;
-                        else if (here_is_me(a, b, p, 1, start_mark)) {
+                        if (here_is_me(a, b, p, 1, start_mark)) {
                                 block_start = p;
                                 p += (m - 1);
                                 state = MAYBE_MARK;
-                        } else state = FAILURE;
+                        } else if (*p == '\n') ;
+                        else state = FAILURE;
                         break;
                 case MAYBE_MARK:
                         if (here_is_me(a, b, p, 1, stop_mark)) {
@@ -715,39 +768,36 @@ static WKStr *extract_block_at_head(XIToken *t, WKStr *start_mark, WKStr *stop_m
                                 state = SUCCESS;
                         } else state = MAYBE_MARK;
                         break;
-                default:
-                        fprintf(stderr, "Illegal state in line %lu.\n", t->line_number);
+                default: ;
                 }
-                if (state == SUCCESS) { /* 从记号内容里消除块标记 */
-                        result = wk_str(NULL);
-                        const char *head = block_start + m;
-                        const char *tail = block_stop - n;
-                        for (const char *q = head; q != tail; q++) {
-                                wk_str_suffix_char(result, *q);
-                        }
-                        WKStr *new_content = wk_str(NULL);
-                        for (const char *q = block_stop; *q != '\0'; q++) {
-                                wk_str_suffix_char(new_content, *q);
-                        }
-                        wk_str_free(t->content);
-                        /* 更新记号内容 */
-                        t->content = new_content;
-                        t->line_number = new_line_number;
+                if (state == SUCCESS) {
+                        result = wk_pair(wk_box(block_start + m, const char *),
+                                         wk_box(block_stop - n, const char *));
                         break;
                 } else if (state == FAILURE || *p == '\0') break;
                 else p++;
         }
         return result;
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-41]>/ETEX
+static WKStr *get_block(WKStr *content, WKPair *block) {
+        WKStr *result = wk_str(NULL);
+        const char *start = wk_box_get(block->x, const char *);
+        const char *stop = wk_box_get(block->y, const char *);
+        for (const char *p = start; p != stop; p++) {
+                wk_str_suffix_char(result, *p);
+        }
+        wk_box_free(block->x);
+        wk_box_free(block->y);
+        free(block);
+        return result;
+}
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-44]>/ETEX
 \stopC
 
-\noindent \type{extract_block_at_head} 返回记号 \type{t} 首部的块标记的内容部分，若 \type{t} 的首部未出现块标记，则返回 \type{NULL}。
-
-设 \type{t} 在记号列表 \type{xi_tokens} 中对应的节点为 \type{x}，对于 \type{extract_block_at_head} 返回的有效结果，为其构建记号的过程由以下辅助函数实现：
+设 \type{t} 在记号列表 \type{xi_tokens} 中对应的节点为 \type{x}，对于 \type{extract_block} 返回的有效结果，为其构建记号的过程由以下辅助函数实现：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 词法分析阶段的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-27]{27}\inoutermargin{\darkred{27}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 词法分析阶段的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-28]{28}\inoutermargin{\darkred{28}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
 static void add_block(WKList *tokens,
                       WKLink *x,
                       WKStr *block,
@@ -776,16 +826,14 @@ static void add_block(WKList *tokens,
         stop->content = wk_str(stop_mark->body);
         WK_LIST_INSF(tokens, x, &stop);
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-41]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-44]>/ETEX
 \stopC
 
 对于记号 \type{t} 及其所属记号节点 \type{it}，语言标记的提取与记号构建过程如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 语言标记提取与记号构建 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-28]{28}\inoutermargin{\darkred{28}}/ETEX
-WKStr *language = extract_block_at_head(t,
-                                        xi_symbols->language_start_mark,
-                                        xi_symbols->language_stop_mark);
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 语言标记提取与记号构建 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-29]{29}\inoutermargin{\darkred{29}}/ETEX
+WKStr *language = extract_block(t, xi_symbols->language_start_mark, xi_symbols->language_stop_mark);
 if (language) {
         add_block(xi_tokens,
                   it,
@@ -795,13 +843,13 @@ if (language) {
                   xi_symbols->language_stop_mark,
                   XI_LANGUAGE_STOP_MARK);
 }
-/BTEX=>\color[darkyellow]{ 析取语言标记 }<\in[xi-29]>/ETEX
+/BTEX=>\color[darkyellow]{ 析取语言标记 }<\in[xi-30]>/ETEX
 \stopC
 
 假设 \type{xi_tokens} 的遍历指针为 \type{it}，则语言标记析取过程实现如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 析取语言标记 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-29]{29}\inoutermargin{\darkred{29}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 析取语言标记 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-30]{30}\inoutermargin{\darkred{30}}/ETEX
 it = xi_tokens->head;
 while (1) {
         if (!it) break;
@@ -811,26 +859,24 @@ while (1) {
                 if (prev) {
                         XIToken *a = wk_link_get(prev, XIToken *);
                         if (a->type == XI_SNIPPET_NAME_DELIMITER) {
-                                /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 语言标记提取与记号构建 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-28]>/ETEX
+                                /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 语言标记提取与记号构建 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-29]>/ETEX
                         }
                 }
         }
         it = it->next;
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-41]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-44]>/ETEX
 \stopC
 
 \subsection{标签引用与运算符}
 
-若有名片段首部存在标签引用，则必定存在运算符，且标签引用须在运算符之前。若有名片段首部不存在标签引用，依然有可能存在运算符。标签引用部分的析取，可基于 \type{extract_block_at_head} 和 \type{add_block} 函数实现。
+若有名片段首部存在标签引用，则必定存在运算符，且标签引用须在运算符之前。若有名片段首部不存在标签引用，依然有可能存在运算符。标签引用部分的析取，可基于 \type{extract_block} 和 \type{add_block} 函数实现。
 
 对于记号 \type{t} 及其所属记号节点 \type{it}，实现标签引用提取与记号构建过程如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 标签引用提取与记号构建 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-30]{30}\inoutermargin{\darkred{30}}/ETEX
-WKStr *tag_reference = extract_block_at_head(t,
-                                             xi_symbols->tag_start_mark,
-                                             xi_symbols->tag_stop_mark);
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 标签引用提取与记号构建 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-31]{31}\inoutermargin{\darkred{31}}/ETEX
+WKStr *tag_reference = extract_block(t, xi_symbols->tag_start_mark, xi_symbols->tag_stop_mark);
 if (tag_reference) {
         add_block(xi_tokens,
                   it,
@@ -840,13 +886,13 @@ if (tag_reference) {
                   xi_symbols->tag_stop_mark,
                   XI_TAG_STOP_MARK);
 }
-/BTEX=>\color[darkyellow]{ 析取标签引用和运算符 }<\in[xi-34]>/ETEX
+/BTEX=>\color[darkyellow]{ 析取标签引用和运算符 }<\in[xi-35]>/ETEX
 \stopC
 
 运算符需要专门的函数予以提取：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 词法分析阶段的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-31]{31}\inoutermargin{\darkred{31}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 词法分析阶段的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-32]{32}\inoutermargin{\darkred{32}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
 static WKStr *extract_operator(XIToken *t, WKStr *operator) {
         /* 构造字符串区间 [a, b) */
         const char *a = t->content->body;
@@ -877,13 +923,13 @@ static WKStr *extract_operator(XIToken *t, WKStr *operator) {
         }
         return result;
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-41]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-44]>/ETEX
 \stopC
 
 设记号 \type{t} 在记号列表 \type{xi_tokens} 中所属结点为 \type{x}，以下函数向记号列表追加追加片段运算符记号：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 词法分析阶段的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-32]{32}\inoutermargin{\darkred{32}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 词法分析阶段的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-33]{33}\inoutermargin{\darkred{33}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
 static void add_operator(WKList *tokens,
                          WKLink *x,
                          WKStr *operator,
@@ -895,13 +941,13 @@ static void add_operator(WKList *tokens,
         a->content = operator;
         WK_LIST_INSF(tokens, x, &a);
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-41]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-44]>/ETEX
 \stopC
 
 对记号列表 \type{xi_tokens} 中的节点 \type{it} 所包含的记号 \type{t} 中的片段追加运算符的析取及其记号构建过程如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 片段追加运算符提取及记号构建 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-33]{33}\inoutermargin{\darkred{33}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 片段追加运算符提取及记号构建 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-34]{34}\inoutermargin{\darkred{34}}/ETEX
 WKStr *appending_mark = extract_operator(t, xi_symbols->snippet_appending_mark);
 if (appending_mark) {
         add_operator(xi_tokens,
@@ -917,14 +963,14 @@ if (appending_mark) {
                              XI_SNIPPET_PREPENDING_MARK);
         }
 }
-/BTEX=>\color[darkyellow]{ 析取标签引用和运算符 }<\in[xi-34]>/ETEX
+/BTEX=>\color[darkyellow]{ 析取标签引用和运算符 }<\in[xi-35]>/ETEX
 \stopC
 
 
 假设 \type{xi_tokens} 的遍历指针为 \type{it}，则标签引用和运算符的析取过程的实现如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 析取标签引用和运算符 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-34]{34}\inoutermargin{\darkred{34}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 析取标签引用和运算符 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-35]{35}\inoutermargin{\darkred{35}}/ETEX
 it = xi_tokens->head;
 while (1) {
         if (!it) break;
@@ -935,14 +981,14 @@ while (1) {
                         XIToken *a = wk_link_get(prev, XIToken *);
                         if (a->type == XI_SNIPPET_NAME_DELIMITER
                             || a->type == XI_LANGUAGE_STOP_MARK) {
-                                /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 标签引用提取与记号构建 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-30]>/ETEX
-                                /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 片段追加运算符提取及记号构建 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-33]>/ETEX
+                                /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 标签引用提取与记号构建 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-31]>/ETEX
+                                /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 片段追加运算符提取及记号构建 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-34]>/ETEX
                         }
                 }
         }
         it = it->next;
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-41]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-44]>/ETEX
 \stopC
 
 \subsection{标签}
@@ -950,10 +996,8 @@ while (1) {
 在扫描过程的第四阶段，析取片段标签，过程与上一节中标签引用的析取过程相同。对记号列表 \type{xi_tokens} 中的节点 \type{it} 所包含的记号 \type{t} 中的标签提取及其记号构建过程如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 标签提取及记号构建 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-35]{35}\inoutermargin{\darkred{35}}/ETEX
-WKStr *tag_mark = extract_block_at_head(t,
-                                        xi_symbols->tag_start_mark,
-                                        xi_symbols->tag_stop_mark);
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 标签提取及记号构建 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-36]{36}\inoutermargin{\darkred{36}}/ETEX
+WKStr *tag_mark = extract_block(t, xi_symbols->tag_start_mark, xi_symbols->tag_stop_mark);
 if (tag_mark) {
         add_block(xi_tokens,
                   it,
@@ -963,13 +1007,13 @@ if (tag_mark) {
                   xi_symbols->tag_stop_mark,
                   XI_TAG_STOP_MARK);
 }
-/BTEX=>\color[darkyellow]{ 析取标签 }<\in[xi-36]>/ETEX
+/BTEX=>\color[darkyellow]{ 析取标签 }<\in[xi-37]>/ETEX
 \stopC
 
 假设 \type{xi_tokens} 的遍历指针为 \type{it}，则标签的解析过程如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 析取标签 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-36]{36}\inoutermargin{\darkred{36}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 析取标签 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-37]{37}\inoutermargin{\darkred{37}}/ETEX
 it = xi_tokens->head;
 while (1) {
         if (!it) break;
@@ -982,13 +1026,13 @@ while (1) {
                             || a->type == XI_LANGUAGE_STOP_MARK
                             || a->type == XI_SNIPPET_APPENDING_MARK
                             || a->type == XI_SNIPPET_PREPENDING_MARK) {
-                                /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 标签提取及记号构建 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-35]>/ETEX
+                                /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 标签提取及记号构建 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-36]>/ETEX
                         }
                 }
         }
         it = it->next;
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-41]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-44]>/ETEX
 \stopC
 
 \subsection{片段引用}
@@ -1006,7 +1050,7 @@ while (1) {
 片段引用析取过程的关键之处在于从 \type{t} 的内容中逐一析取片段引用标记。辅助函数 \type{find_snippet_reference} 可返回 \type{t} 中第一个片段引用标记（假如它存在），其定义如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 词法分析阶段的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-37]{37}\inoutermargin{\darkred{37}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 词法分析阶段的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-38]{38}\inoutermargin{\darkred{38}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
 static WKPair *find_snippet_reference(WKStr *content)
 {
         WKStr *reference_start_mark = xi_symbols->snippet_reference_start_mark;
@@ -1055,17 +1099,18 @@ static WKPair *find_snippet_reference(WKStr *content)
                 return result;
         } else return NULL;
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-41]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-44]>/ETEX
 \stopC
 
 在能够析取 \type{t}$\in$\type{x} 的内容中片段引用标记后，便可基于析取结果，将 \type{t} 的内容分割为五个部分——片段引用之前的内容、片段引用起始标记、片段名称、片段引用结束标记以及片段引用之后的内容，在记号列表中取代 \type{t}。该过程由以下辅助函数实现：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 词法分析阶段的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-38]{38}\inoutermargin{\darkred{38}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 词法分析阶段的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-39]{39}\inoutermargin{\darkred{39}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+
+/BTEX\color[darkmagenta]{<split_snippet>}/ETEX
 static void split_snippet(WKList *tokens, WKLink *x, WKPair *snippet_reference) {
-        WKStr *snippet_name_continuation = xi_symbols->snippet_name_continuation;
-        WKStr *snippet_reference_start_mark = xi_symbols->snippet_reference_start_mark;
-        WKStr *snippet_reference_stop_mark = xi_symbols->snippet_reference_stop_mark;
+        WKStr *ref_start_mark = xi_symbols->snippet_reference_start_mark;
+        WKStr *ref_stop_mark = xi_symbols->snippet_reference_stop_mark;
         XIToken *t = wk_link_get(x, XIToken *);
         size_t line_number = t->line_number;
         const char *ref_start = wk_box_get(snippet_reference->x, const char *);
@@ -1081,15 +1126,15 @@ static void split_snippet(WKList *tokens, WKLink *x, WKPair *snippet_reference) 
         t_a->line_number = t->line_number;
         t_a->content = a;
         /* 片段引用起始标记 */
-        WKStr *b = wk_str(snippet_reference_start_mark->body);
+        WKStr *b = wk_str(ref_start_mark->body);
         XIToken *t_b = malloc(sizeof(XIToken));
         t_b->type = XI_SNIPPET_REFERENCE_START_MARK;
         t_b->line_number = line_number;
         t_b->content = b;
         /* 片段名称 */
         WKStr *c = wk_str(NULL);
-        const char *left = ref_start + snippet_reference_start_mark->n;
-        const char *right = ref_stop - snippet_reference_stop_mark->n;
+        const char *left = ref_start + ref_start_mark->n;
+        const char *right = ref_stop - ref_stop_mark->n;
         for (const char *p = left; p != right; p++) {
                 wk_str_suffix_char(c, *p);
                 if (*p == '\n') line_number++;
@@ -1099,39 +1144,119 @@ static void split_snippet(WKList *tokens, WKLink *x, WKPair *snippet_reference) 
         t_c->line_number = t_b->line_number;
         t_c->content = c;
         /* 片段引用结束标记 */
-        WKStr *d = wk_str(snippet_reference_stop_mark->body);
+        WKStr *d = wk_str(ref_stop_mark->body);
         XIToken *t_d = malloc(sizeof(XIToken));
         t_d->type = XI_SNIPPET_REFERENCE_STOP_MARK;
         t_d->line_number = line_number;
         t_d->content = d;
-        /* 片段引用之后的内容 */
-        WKStr *e = wk_str(NULL);
-        bool after_reference = true;
-        for (const char *p = ref_stop; *p != '\0'; p++) {
-                if (after_reference) {
-                         /* 忽略与片段引用之后与片段引用终止符同一行的文本 */
-                        if (*p == '\n') {
-                                after_reference = false;
-                                wk_str_suffix_char(e, *p);
-                        }
-                } else wk_str_suffix_char(e, *p);
-        }
         /* 更新记号列表 */
         WK_LIST_INSF(tokens, x, &t_a);
         WK_LIST_INSF(tokens, x, &t_b);
         WK_LIST_INSF(tokens, x, &t_c);
         WK_LIST_INSF(tokens, x, &t_d);
-        wk_str_free(t->content);
-        t->content = e;
+        /* 更新行号 */
         t->line_number = line_number;
+        /* 片段引用之后的内容 */
+        WKStr *e = wk_str(NULL); /* 片段引用之后的同行内容（不包含换行符） */
+        WKStr *f = wk_str(NULL); /* e 之后的内容 */
+        bool after_reference = true;
+        for (const char *p = ref_stop; *p != '\0'; p++) {
+                if (after_reference) {
+                         /* 收集与片段引用之后与片段引用终止符同一行的文本 */
+                        if (*p == '\n') {
+                                after_reference = false;
+                                wk_str_suffix_char(f, *p);
+                        } else wk_str_suffix_char(e, *p);
+                } else wk_str_suffix_char(f, *p);
+        }
+        if (e->n > 0) { /* 析取片段切片 */
+                add_snippet_slice_token(tokens, x, e);
+        }
+        wk_str_free(e);
+        wk_str_free(t->content);
+        /* 剩余内容仍存于 t */
+        t->content = f;
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-41]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-44]>/ETEX
+\stopC
+
+\startC
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 词法分析阶段的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-40]{40}\inoutermargin{\darkred{40}}/ETEX/BTEX\color[darkmagenta]{\ <split_snippet>\ }/ETEX/BTEX\ \color[darkgreen]{\bf $\wedge+$}\ /ETEX
+/* 创建切片起止记号，添加到 x 之前 */
+static void add_snippet_slice_token(WKList *tokens, WKLink *x, WKStr *after_snippet_ref) {
+        XIToken *t = wk_link_get(x, XIToken *);
+        WKStr *slice_start_mark = xi_symbols->snippet_slice_start_mark;
+        WKStr *slice_stop_mark = xi_symbols->snippet_slice_stop_mark;
+        WKPair *block = find_block(after_snippet_ref, slice_start_mark, slice_stop_mark);
+        if (block) {
+                WKStr *slice_raw = get_block(after_snippet_ref, block);
+                WKArray *slice = str_split(slice_raw->body, ",");
+                if (slice->n !=2) {
+                        fprintf(stderr,
+                                "Illegal snippet slice in line %lu!\n",
+                                t->line_number);
+                        exit(EXIT_FAILURE);
+                }
+                for (size_t i = 0; i < slice->n; i++) {
+                        XIToken *new_t = malloc(sizeof(XIToken));
+                        WKStr *content = wk_array_get(slice, i, WKStr *);
+                        if (i == 0) new_t->type = XI_SNIPPET_SLICE_START_MARK;
+                        else new_t->type = XI_SNIPPET_SLICE_STOP_MARK;
+                        new_t->line_number = t->line_number;
+                        block = find_block(content,
+                                           xi_symbols->tag_start_mark,
+                                           xi_symbols->tag_stop_mark);
+                        if (block) {
+                                new_t->content = get_block(content, block);
+                                wk_str_free(content);
+                        } else new_t->content = content;
+                        WK_LIST_INSF(tokens, x, &new_t);
+                }
+                wk_array_free(slice);
+                wk_str_free(slice_raw);
+        }
+}
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-44]>/ETEX
+\stopC
+
+\noindent 上述代码中用于分割字符串的函数 \type{str_split}，其定义如下
+
+\startC
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 词法分析阶段的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-41]{41}\inoutermargin{\darkred{41}}/ETEX/BTEX\ \color[darkgreen]{\bf $\wedge+$}\ /ETEX
+WKArray *str_split(const char *str, const char *sep) {
+        /* 主动在 str 的内容尾部追加 sep，从而将分割过程限制在一个循环里 */
+        WKStr *str_1 = wk_str(str);
+        wk_str_suffix(str_1, sep);
+        /* 根据 sep 分割 */
+        WKArray *a = wk_array(WKStr *);
+        const char *p = str_1->body;
+        const char *q = p;
+        size_t n = strlen(sep);
+        while (1) {
+                q = strstr(q, sep);
+                if (q) {
+                        WKStr *s = wk_str(NULL);
+                        for (const char *r = p; r != q; r++) {
+                                wk_str_suffix_char(s, *r);
+                        }
+                        if (s->n > 0) {
+                                wk_str_trim(s);
+                                wk_array_add(a, s, WKStr *);
+                        } else wk_str_free(s);
+                        q += n;
+                        p = q;
+                } else break;
+        }
+        wk_str_free(str_1);
+        return a;
+}
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-44]>/ETEX
 \stopC
 
 假设 \type{xi_tokens} 的遍历指针为 \type{it}，则有名片段中的所有片段引用的解析过程如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 析取片段引用 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-39]{39}\inoutermargin{\darkred{39}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 析取片段引用 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-42]{42}\inoutermargin{\darkred{42}}/ETEX
 it = xi_tokens->head;
 while (1) {
         if (!it) break;
@@ -1144,28 +1269,29 @@ while (1) {
                             && t_prev->type != XI_LANGUAGE_START_MARK
                             && t_prev->type != XI_TAG_START_MARK) {
                                 while (1) {
-                                        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 构造片段引用 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-40]>/ETEX
+                                        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 构造片段引用 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-43]>/ETEX
                                 }
                         }
                 }
         }
         it = it->next;
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-41]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-44]>/ETEX
 \stopC
 
 上述代码中，对 \type{t} 中可能存在的片段引用析取过程如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 构造片段引用 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-40]{40}\inoutermargin{\darkred{40}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 构造片段引用 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-43]{43}\inoutermargin{\darkred{43}}/ETEX
 WKPair *snippet_reference = find_snippet_reference(t->content);
-if (snippet_reference) {
+if (!snippet_reference) break;
+else {
         split_snippet(xi_tokens, it, snippet_reference);
         wk_box_free(snippet_reference->x);
         wk_box_free(snippet_reference->y);
         free(snippet_reference);
-} else break;
-/BTEX=>\color[darkyellow]{ 析取片段引用 }<\in[xi-39]>/ETEX
+}
+/BTEX=>\color[darkyellow]{ 析取片段引用 }<\in[xi-42]>/ETEX
 \stopC
 
 \subsection{小节}
@@ -1173,27 +1299,27 @@ if (snippet_reference) {
 汇集词法分析的各阶段代码：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi 的数据结构与辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-41]{41}\inoutermargin{\darkred{41}}/ETEX
-/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 记号 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-1]>/ETEX/BTEX\ <\in[xi-2]>/ETEX/BTEX\ <\in[xi-3]>/ETEX/BTEX\ <\in[xi-7]>/ETEX/BTEX\ <\in[xi-92]>/ETEX
-/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 词法分析阶段的辅助函数 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-11]>/ETEX/BTEX\ <\in[xi-12]>/ETEX/BTEX\ <\in[xi-13]>/ETEX/BTEX\ <\in[xi-18]>/ETEX/BTEX\ <\in[xi-20]>/ETEX/BTEX\ <\in[xi-22]>/ETEX/BTEX\ <\in[xi-23]>/ETEX/BTEX\ <\in[xi-26]>/ETEX/BTEX\ <\in[xi-27]>/ETEX/BTEX\ <\in[xi-31]>/ETEX/BTEX\ <\in[xi-32]>/ETEX/BTEX\ <\in[xi-37]>/ETEX/BTEX\ <\in[xi-38]>/ETEX
-/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 辅助函数 delete_tokens，用于释放记号列表 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-42]>/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi 的数据结构与辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-44]{44}\inoutermargin{\darkred{44}}/ETEX
+/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 记号 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-1]>/ETEX/BTEX\ <\in[xi-2]>/ETEX/BTEX\ <\in[xi-3]>/ETEX/BTEX\ <\in[xi-7]>/ETEX/BTEX\ <\in[xi-96]>/ETEX
+/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 词法分析阶段的辅助函数 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-11]>/ETEX/BTEX\ <\in[xi-12]>/ETEX/BTEX\ <\in[xi-13]>/ETEX/BTEX\ <\in[xi-18]>/ETEX/BTEX\ <\in[xi-20]>/ETEX/BTEX\ <\in[xi-22]>/ETEX/BTEX\ <\in[xi-23]>/ETEX/BTEX\ <\in[xi-26]>/ETEX/BTEX\ <\in[xi-27]>/ETEX/BTEX\ <\in[xi-28]>/ETEX/BTEX\ <\in[xi-32]>/ETEX/BTEX\ <\in[xi-33]>/ETEX/BTEX\ <\in[xi-38]>/ETEX/BTEX\ <\in[xi-39]>/ETEX/BTEX\ <\in[xi-40]>/ETEX/BTEX\ <\in[xi-41]>/ETEX
+/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 辅助函数 delete_tokens，用于释放记号列表 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-45]>/ETEX
 static WKList *xi_lexer(FILE *xi_file) {
         /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 准备可忽略的空白字符集 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-15]>/ETEX
         /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 分段 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-21]>/ETEX
         /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 析取片段名界限符 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-24]>/ETEX
-        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 析取语言标记 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-29]>/ETEX
-        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 析取标签引用和运算符 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-34]>/ETEX
-        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 析取标签 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-36]>/ETEX
-        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 析取片段引用 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-39]>/ETEX
+        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 析取语言标记 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-30]>/ETEX
+        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 析取标签引用和运算符 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-35]>/ETEX
+        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 析取标签 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-37]>/ETEX
+        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 析取片段引用 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-42]>/ETEX
         return xi_tokens;
 }
-/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-129]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-131]>/ETEX
 \stopC
 
 上述代码片段所用的辅助函数 \type{delete_tokens}，其定义为
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 辅助函数 delete_tokens，用于释放记号列表 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-42]{42}\inoutermargin{\darkred{42}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 辅助函数 delete_tokens，用于释放记号列表 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-45]{45}\inoutermargin{\darkred{45}}/ETEX
 static void delete_tokens(WKList *tokens) {
         for (WKLink *it = tokens->head; it; it = it->next) {
                 XIToken *t = wk_link_get(it, XIToken *);
@@ -1202,14 +1328,14 @@ static void delete_tokens(WKList *tokens) {
         }
         wk_list_free(tokens);
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-41]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-44]>/ETEX
 \stopC
 
 
 函数 \type{xi_print_tokens}，可用于查看词法分析结果，其定义如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi_print_tokens }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-43]{43}\inoutermargin{\darkred{43}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi_print_tokens }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-46]{46}\inoutermargin{\darkred{46}}/ETEX
 static void xi_print_tokens(WKList *tokens) {
         for (WKLink *it = tokens->head; it; it = it->next) {
                 XIToken *t = wk_link_get(it, XIToken *);
@@ -1242,7 +1368,13 @@ static void xi_print_tokens(WKList *tokens) {
                         printf("snippet reference start mark");
                         break;
                 case XI_SNIPPET_REFERENCE_STOP_MARK:
-                        printf("snippet reference end mark");
+                        printf("snippet reference stop mark");
+                        break;
+                case XI_SNIPPET_SLICE_START_MARK:
+                        printf("snippet slice start mark");
+                        break;
+                case XI_SNIPPET_SLICE_STOP_MARK:
+                        printf("snippet slice stop mark");
                         break;
                 case XI_TEXT:
                         printf("text");
@@ -1260,19 +1392,19 @@ static void xi_print_tokens(WKList *tokens) {
 基于词法分析所得记号列表可构造语法树。语法树中存储的数据为语法单元，其数据结构如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 语法单元 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-44]{44}\inoutermargin{\darkred{44}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 语法单元 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-47]{47}\inoutermargin{\darkred{47}}/ETEX
 typedef struct {
         XISyntaxType type;
         WKList *tokens;
         size_t id;
 } XISyntax;
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-62]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-65]>/ETEX
 \stopC
 
 \noindent \type{type} 字段表示语法节点的类型，具体有以下类型：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 语法单元 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-45]{45}\inoutermargin{\darkred{45}}/ETEX/BTEX\ \color[darkgreen]{\bf $\wedge+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 语法单元 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-48]{48}\inoutermargin{\darkred{48}}/ETEX/BTEX\ \color[darkgreen]{\bf $\wedge+$}\ /ETEX
 typedef enum {
         XI_SNIPPET,
         XI_SNIPPET_WITH_NAME,
@@ -1284,9 +1416,11 @@ typedef enum {
         XI_SNIPPET_TAG,
         XI_SNIPPET_CONTENT,
         XI_SNIPPET_REFERENCE,
+        XI_SNIPPET_SLICE_START,
+        XI_SNIPPET_SLICE_STOP,
         XI_SNIPPET_TEXT
 } XISyntaxType;
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-62]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-65]>/ETEX
 \stopC
 
 \noindent \type{tokens} 为构成语法节点的记号列表，词法分析输出的记号列表会在语法树的构造过程中逐步被分解到语法树的叶层节点里，非叶层节点的 \type{tokens} 字段为 \type{NULL}。\type{id} 字段只对有名片段有意义，且从 1 开始逐一递增，对于无名片段以及其他类型的语法节点，其值为 0。
@@ -1294,9 +1428,9 @@ typedef enum {
 在语法分析过程中，所构建的语法节点依序存入由 WK 库的 WKTree 模块提供的 N 叉树容器，先引入该模块的头文件：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 外境 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-46]{46}\inoutermargin{\darkred{46}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 外境 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-49]{49}\inoutermargin{\darkred{49}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
 #include <wk-tree.h>
-/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-129]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-131]>/ETEX
 \stopC
 
 语法树的构造过程分为三个阶段。第一阶段，构造无名片段和有名片段节点。第二阶段，对有名片段进行结构化处理。第三阶段，对有名片段的内容进行结构化处理。注意，语法树的根节点的数据字段为 \type{NULL}。这三个阶段构造了四层的语法树结构。
@@ -1306,7 +1440,7 @@ typedef enum {
 根据记号列表中的片段界限符以及片段名称界限符便可区分两类片段形式，并在语法树中为其构造节点：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 语法分析过程所需的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-47]{47}\inoutermargin{\darkred{47}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 语法分析过程所需的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-50]{50}\inoutermargin{\darkred{50}}/ETEX
 static WKTree *syntax_tree_init(WKList *tokens) {
         WKTree *xi_tree = wk_tree(XISyntax *);
         wk_tree_add(xi_tree, NULL, NULL, XISyntax *); /* 根节点为空 */
@@ -1321,7 +1455,7 @@ static WKTree *syntax_tree_init(WKList *tokens) {
                                 snippet->type = XI_SNIPPET;
                                 snippet->tokens = wk_list(XIToken *);
                                 snippet->id = 0;
-                                /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 为片段收集记号并确定片段类型 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-48]>/ETEX
+                                /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 为片段收集记号并确定片段类型 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-51]>/ETEX
                                 /* 之前在记号列表尾部强行插入了一个片段界限记号，
                                    它可能会导致语法节点的内容为空，故而需要予以忽略 */
                                 if (snippet->tokens) {
@@ -1342,13 +1476,13 @@ static WKTree *syntax_tree_init(WKList *tokens) {
         wk_list_free(tokens);
         return xi_tree;
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-62]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-65]>/ETEX
 \stopC
 
 构造片段所包含的记号子集以及片段类型的代码如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 为片段收集记号并确定片段类型 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-48]{48}\inoutermargin{\darkred{48}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 为片段收集记号并确定片段类型 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-51]{51}\inoutermargin{\darkred{51}}/ETEX
 WKLink *a = prev;
 while (1) {
         if (a) {
@@ -1364,7 +1498,7 @@ while (1) {
         } else break;
         a = a->prev;
 }
-/BTEX=>\color[darkyellow]{ 语法分析过程所需的辅助函数 }<\in[xi-47]>/ETEX
+/BTEX=>\color[darkyellow]{ 语法分析过程所需的辅助函数 }<\in[xi-50]>/ETEX
 \stopC
 
 \subsection{有名片段的子节点集}
@@ -1374,30 +1508,30 @@ while (1) {
 首先，对于语法树 \type{syntax_tree} 中任一有名片段的语法节点 \type{x}，初始化迭代指针 \type{it}，使之指向 \type{x} 中语法单元的记号序列首节点，并获得当前记号 \type{current_token}：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 有名片段的子节点集构造过程 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-49]{49}\inoutermargin{\darkred{49}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 有名片段的子节点集构造过程 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-52]{52}\inoutermargin{\darkred{52}}/ETEX
 XISyntax *snippet = wk_branch_get(x, XISyntax *);
 WKLink *it = snippet->tokens->head;
 XIToken *current_token = wk_link_get(it, XIToken *);
-/BTEX=>\color[darkyellow]{ 语法分析过程所需的辅助函数 }<\in[xi-58]>/ETEX
+/BTEX=>\color[darkyellow]{ 语法分析过程所需的辅助函数 }<\in[xi-61]>/ETEX
 \stopC
 
 有名片段的第一个记号应当是片段名，其语法节点构造过程如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 有名片段的子节点集构造过程 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-50]{50}\inoutermargin{\darkred{50}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 有名片段的子节点集构造过程 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-53]{53}\inoutermargin{\darkred{53}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
 XISyntax *snippet_name = malloc(sizeof(XISyntax));
 snippet_name->type = XI_SNIPPET_NAME;
 snippet_name->tokens = wk_list(XIToken *);
 snippet_name->id = 0;
 wk_list_suffix(snippet_name->tokens, current_token, XIToken *);
 wk_tree_add(syntax_tree, x, snippet_name, XISyntax *);
-/BTEX=>\color[darkyellow]{ 语法分析过程所需的辅助函数 }<\in[xi-58]>/ETEX
+/BTEX=>\color[darkyellow]{ 语法分析过程所需的辅助函数 }<\in[xi-61]>/ETEX
 \stopC
 
 移动 \type{it} 使之跳过片段名界限符，然后构造可能存在的语言标记节点：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 有名片段的子节点集构造过程 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-51]{51}\inoutermargin{\darkred{51}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 有名片段的子节点集构造过程 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-54]{54}\inoutermargin{\darkred{54}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
 it = it->next->next; /* 跳过片段名字界限符 */
 current_token = wk_link_get(it, XIToken *);
 if (current_token->type == XI_LANGUAGE_START_MARK) {
@@ -1413,13 +1547,13 @@ if (current_token->type == XI_LANGUAGE_START_MARK) {
         current_token = wk_link_get(it, XIToken *);
         it = it->next; /* 跳过语言标记终结符 */
 }
-/BTEX=>\color[darkyellow]{ 语法分析过程所需的辅助函数 }<\in[xi-58]>/ETEX
+/BTEX=>\color[darkyellow]{ 语法分析过程所需的辅助函数 }<\in[xi-61]>/ETEX
 \stopC
 
 然后构造可能存在的标签引用节点：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 有名片段的子节点集构造过程 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-52]{52}\inoutermargin{\darkred{52}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 有名片段的子节点集构造过程 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-55]{55}\inoutermargin{\darkred{55}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
 current_token = wk_link_get(it, XIToken *);
 if (current_token->type == XI_TAG_START_MARK) {
         bool is_tag_ref = false;
@@ -1444,13 +1578,13 @@ if (current_token->type == XI_TAG_START_MARK) {
                 it = it->next->next;
         }
 }
-/BTEX=>\color[darkyellow]{ 语法分析过程所需的辅助函数 }<\in[xi-58]>/ETEX
+/BTEX=>\color[darkyellow]{ 语法分析过程所需的辅助函数 }<\in[xi-61]>/ETEX
 \stopC
 
 继而构造可能存在的运算符节点：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 有名片段的子节点集构造过程 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-53]{53}\inoutermargin{\darkred{53}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 有名片段的子节点集构造过程 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-56]{56}\inoutermargin{\darkred{56}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
 current_token = wk_link_get(it, XIToken *);
 XISyntax *operator = NULL;
 if (current_token->type == XI_SNIPPET_APPENDING_MARK) {
@@ -1469,13 +1603,13 @@ if (operator) {
         wk_tree_add(syntax_tree, x, operator, XISyntax *);
         it = it->next;
 }
-/BTEX=>\color[darkyellow]{ 语法分析过程所需的辅助函数 }<\in[xi-58]>/ETEX
+/BTEX=>\color[darkyellow]{ 语法分析过程所需的辅助函数 }<\in[xi-61]>/ETEX
 \stopC
 
 之后便是构造可能存在的标签节点：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 有名片段的子节点集构造过程 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-54]{54}\inoutermargin{\darkred{54}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 有名片段的子节点集构造过程 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-57]{57}\inoutermargin{\darkred{57}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
 current_token = wk_link_get(it, XIToken *);
 if (current_token->type == XI_TAG_START_MARK) {
         XISyntax *tag = malloc(sizeof(XISyntax));
@@ -1489,13 +1623,13 @@ if (current_token->type == XI_TAG_START_MARK) {
         /* 跳过标签结束符 */
         it = it->next->next;
 }
-/BTEX=>\color[darkyellow]{ 语法分析过程所需的辅助函数 }<\in[xi-58]>/ETEX
+/BTEX=>\color[darkyellow]{ 语法分析过程所需的辅助函数 }<\in[xi-61]>/ETEX
 \stopC
 
 余下部分，便是有名片段的内容部分，其语法节点构造过程如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 有名片段的子节点集构造过程 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-55]{55}\inoutermargin{\darkred{55}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 有名片段的子节点集构造过程 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-58]{58}\inoutermargin{\darkred{58}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
 XISyntax *content = malloc(sizeof(XISyntax));
 content->type = XI_SNIPPET_CONTENT;
 content->tokens = wk_list(XIToken *);
@@ -1505,13 +1639,13 @@ for (WKLink *it_a = it; it_a; it_a = it_a->next) {
         wk_list_suffix(content->tokens, current_token, XIToken *);
 }
 wk_tree_add(syntax_tree, x, content, XISyntax *);
-/BTEX=>\color[darkyellow]{ 语法分析过程所需的辅助函数 }<\in[xi-58]>/ETEX
+/BTEX=>\color[darkyellow]{ 语法分析过程所需的辅助函数 }<\in[xi-61]>/ETEX
 \stopC
 
 一些不需要进入语法树的记号，需要从记号列表中剔除：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 释放不需要进入语法树的记号 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-56]{56}\inoutermargin{\darkred{56}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 释放不需要进入语法树的记号 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-59]{59}\inoutermargin{\darkred{59}}/ETEX
 for (it = snippet->tokens->head; it; it = it->next) {
         current_token = wk_link_get(it, XIToken *);
         if (current_token->type == XI_SNIPPET_NAME_DELIMITER
@@ -1523,35 +1657,35 @@ for (it = snippet->tokens->head; it; it = it->next) {
                 free(current_token);
         }
 }
-/BTEX=>\color[darkyellow]{ 语法分析过程所需的辅助函数 }<\in[xi-58]>/ETEX
+/BTEX=>\color[darkyellow]{ 语法分析过程所需的辅助函数 }<\in[xi-61]>/ETEX
 \stopC
 
 至此，有名片段语法单元 \type{snippet} 里的记号序列，其内容已全部转移至其子节点集，故而需将其置空：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 清空有名片段语法单元的记号序列 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-57]{57}\inoutermargin{\darkred{57}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 清空有名片段语法单元的记号序列 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-60]{60}\inoutermargin{\darkred{60}}/ETEX
 wk_list_free(snippet->tokens);
 snippet->tokens = NULL;
-/BTEX=>\color[darkyellow]{ 语法分析过程所需的辅助函数 }<\in[xi-58]>/ETEX
+/BTEX=>\color[darkyellow]{ 语法分析过程所需的辅助函数 }<\in[xi-61]>/ETEX
 \stopC
 
 将上述过程汇总为一个专用的辅助函数：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 语法分析过程所需的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-58]{58}\inoutermargin{\darkred{58}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 语法分析过程所需的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-61]{61}\inoutermargin{\darkred{61}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
 static void add_branches_for_snippet_with_name(WKTree *syntax_tree, WKBranch *x)
 {
-        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 有名片段的子节点集构造过程 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-49]>/ETEX/BTEX\ <\in[xi-50]>/ETEX/BTEX\ <\in[xi-51]>/ETEX/BTEX\ <\in[xi-52]>/ETEX/BTEX\ <\in[xi-53]>/ETEX/BTEX\ <\in[xi-54]>/ETEX/BTEX\ <\in[xi-55]>/ETEX
-        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 释放不需要进入语法树的记号 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-56]>/ETEX
-        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 清空有名片段语法单元的记号序列 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-57]>/ETEX
+        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 有名片段的子节点集构造过程 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-52]>/ETEX/BTEX\ <\in[xi-53]>/ETEX/BTEX\ <\in[xi-54]>/ETEX/BTEX\ <\in[xi-55]>/ETEX/BTEX\ <\in[xi-56]>/ETEX/BTEX\ <\in[xi-57]>/ETEX/BTEX\ <\in[xi-58]>/ETEX
+        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 释放不需要进入语法树的记号 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-59]>/ETEX
+        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 清空有名片段语法单元的记号序列 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-60]>/ETEX
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-62]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-65]>/ETEX
 \stopC
 
 设语法树为 \type{xi_tree}，为语法树中第 2 层\footnote{语法树根节点为第 1 层。}所有类型为 \type{XI_SNIPPET_WITH_NAME} 的片段节点构造子节点集的代码如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 为有名片段构造子节点集 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-59]{59}\inoutermargin{\darkred{59}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 为有名片段构造子节点集 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-62]{62}\inoutermargin{\darkred{62}}/ETEX
 WKArray *branches = xi_tree->root->lower;
 for (size_t i = 0; i < branches->n; i++) {
         WKBranch *p = wk_array_get(branches, i, WKBranch *);
@@ -1560,22 +1694,24 @@ for (size_t i = 0; i < branches->n; i++) {
                 add_branches_for_snippet_with_name(xi_tree, p);
         }
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-62]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-65]>/ETEX
 \stopC
 
 \subsection{有名片段的内容}
 
-有名片段的内容节点只包含两种语法节点类型：
+有名片段的内容节点包含四种种语法节点类型：
 
 \startitemize
 \item \type{XI_SNIPPET_REFERENCE}
+\item \type{XI_SNIPPET_SLICE_START}
+\item \type{XI_SNIPPET_SLICE_STOP}
 \item \type{XI_SNIPPET_TEXT}
 \stopitemize
 
 \noindent 假设语法树的第三层节点 \type{x} 的类型为 \type{XI_SNIPPET_CONTENT}，需为其构造子节点集，过程如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 语法分析过程所需的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-60]{60}\inoutermargin{\darkred{60}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 语法分析过程所需的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-63]{63}\inoutermargin{\darkred{63}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
 static void add_branches_for_snippet_content(WKTree *syntax_tree, WKBranch *x)
 {
         XISyntax *content = wk_branch_get(x, XISyntax *);
@@ -1594,6 +1730,24 @@ static void add_branches_for_snippet_content(WKTree *syntax_tree, WKBranch *x)
                         wk_tree_add(syntax_tree, x, reference, XISyntax *);
                         /* 让片段引用结束符作为当前节点 */
                         it = it->next;
+                } else if (token->type == XI_SNIPPET_SLICE_START_MARK) {
+                        /* 构造片段切片起点 */
+                        token = wk_link_get(it, XIToken *);
+                        XISyntax *slice_start = malloc(sizeof(XISyntax));
+                        slice_start->type = XI_SNIPPET_SLICE_START;
+                        slice_start->tokens = wk_list(XIToken *);
+                        slice_start->id = 0;
+                        wk_list_suffix(slice_start->tokens, token, XIToken *);
+                        wk_tree_add(syntax_tree, x, slice_start, XISyntax *);
+                        /* 构造片段切片终点 */
+                        it = it->next;
+                        token = wk_link_get(it, XIToken *);
+                        XISyntax *slice_stop = malloc(sizeof(XISyntax));
+                        slice_stop->type = XI_SNIPPET_SLICE_STOP;
+                        slice_stop->tokens = wk_list(XIToken *);
+                        slice_stop->id = 0;
+                        wk_list_suffix(slice_stop->tokens, token, XIToken *);
+                        wk_tree_add(syntax_tree, x, slice_stop, XISyntax *);
                 } else {
                         XISyntax *text = malloc(sizeof(XISyntax));
                         text->type = XI_SNIPPET_TEXT;
@@ -1616,13 +1770,13 @@ static void add_branches_for_snippet_content(WKTree *syntax_tree, WKBranch *x)
         wk_list_free(content->tokens);
         content->tokens = NULL;
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-62]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-65]>/ETEX
 \stopC
 
 设语法树为 \type{xi_tree}，为语法树中第三层所有类型为 \type{XI_SNIPPET_CONTENT} 的节点构造子节点集的代码如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 为有名片段的内容节点构造子节点集 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-61]{61}\inoutermargin{\darkred{61}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 为有名片段的内容节点构造子节点集 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-64]{64}\inoutermargin{\darkred{64}}/ETEX
 WKArray *second_level_branches = xi_tree->root->lower;
 for (size_t i = 0; i < second_level_branches->n; i++) {
         WKBranch *p = wk_array_get(second_level_branches, i, WKBranch *);
@@ -1638,7 +1792,7 @@ for (size_t i = 0; i < second_level_branches->n; i++) {
                 }
         }
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-62]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-65]>/ETEX
 \stopC
 
 \subsection{小结}
@@ -1646,24 +1800,24 @@ for (size_t i = 0; i < second_level_branches->n; i++) {
 汇集语法分析相关的代码片段：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi 的数据结构与辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-62]{62}\inoutermargin{\darkred{62}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
-/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 语法单元 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-44]>/ETEX/BTEX\ <\in[xi-45]>/ETEX
-/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 语法分析过程所需的辅助函数 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-47]>/ETEX/BTEX\ <\in[xi-58]>/ETEX/BTEX\ <\in[xi-60]>/ETEX
-/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 辅助函数 delete_syntax_tree，用于释放语法树 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-63]>/ETEX
-/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 辅助函数 first_token_line_number，用于获取语法树节点的首行行号 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-64]>/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi 的数据结构与辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-65]{65}\inoutermargin{\darkred{65}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 语法单元 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-47]>/ETEX/BTEX\ <\in[xi-48]>/ETEX
+/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 语法分析过程所需的辅助函数 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-50]>/ETEX/BTEX\ <\in[xi-61]>/ETEX/BTEX\ <\in[xi-63]>/ETEX
+/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 辅助函数 delete_syntax_tree，用于释放语法树 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-66]>/ETEX
+/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 辅助函数 first_token_line_number，用于获取语法树节点的首行行号 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-67]>/ETEX
 static WKTree *xi_parser(WKList *tokens) {
         WKTree *xi_tree = syntax_tree_init(tokens);
-        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 为有名片段构造子节点集 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-59]>/ETEX
-        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 为有名片段的内容节点构造子节点集 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-61]>/ETEX
+        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 为有名片段构造子节点集 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-62]>/ETEX
+        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 为有名片段的内容节点构造子节点集 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-64]>/ETEX
         return xi_tree;
 }
-/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-129]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-131]>/ETEX
 \stopC
 
 辅助函数 \type{delete_syntax_tree} 的定义如下
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 辅助函数 delete_syntax_tree，用于释放语法树 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-63]{63}\inoutermargin{\darkred{63}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 辅助函数 delete_syntax_tree，用于释放语法树 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-66]{66}\inoutermargin{\darkred{66}}/ETEX
 static void delete_syntax_body(WKBranch *root) {
         if (!root) return;
         XISyntax *body = wk_branch_get(root, XISyntax *);
@@ -1681,13 +1835,13 @@ static void delete_syntax_tree(WKTree *syntax_tree) {
         delete_syntax_body(syntax_tree->root);
         wk_tree_free(syntax_tree);
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-62]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-65]>/ETEX
 \stopC
 
 辅助函数 \type{first_token_line_number} 的定义为
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 辅助函数 first_token_line_number，用于获取语法树节点的首行行号 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-64]{64}\inoutermargin{\darkred{64}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 辅助函数 first_token_line_number，用于获取语法树节点的首行行号 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-67]{67}\inoutermargin{\darkred{67}}/ETEX
 static size_t first_token_line_number(WKBranch *x) {
         size_t n = 0;
         XISyntax *a = wk_branch_get(x, XISyntax *);
@@ -1705,13 +1859,13 @@ static size_t first_token_line_number(WKBranch *x) {
         }
         return n;
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-62]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-65]>/ETEX
 \stopC
 
 函数 \type{xi_print_syntax_tree} 可用于查看语法分析结果，其定义如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi_print_syntax_tree }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-65]{65}\inoutermargin{\darkred{65}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi_print_syntax_tree }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-68]{68}\inoutermargin{\darkred{68}}/ETEX
 static void print_syntax_tree(WKBranch *root) {
         if (!root) return;
         XISyntax *a = wk_branch_get(root, XISyntax *);
@@ -1747,6 +1901,12 @@ static void print_syntax_tree(WKBranch *root) {
                 case XI_SNIPPET_REFERENCE:
                         printf("<snippet reference>\n");
                         break;
+                case XI_SNIPPET_SLICE_START:
+                        printf("<snippet slice start>\n");
+                        break;
+                case XI_SNIPPET_SLICE_STOP:
+                        printf("<snippet slice stop>\n");
+                        break;
                 case XI_SNIPPET_TEXT:
                         printf("<snippet text>\n");
                         break;
@@ -1773,13 +1933,13 @@ static void print_syntax_tree(WKBranch *root) {
 片段有了名字，就有了最基本的纠缠——一个片段可以引用另一个片段。现在需要为有名片段建立一个关系表，呈现它们之间的引用关系。关系表的数据结构基于 WK 库的 WKTable 模块提供的散列表实现。关系表里存储的数据，其结构为
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ XITie 结构 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-66]{66}\inoutermargin{\darkred{66}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ XITie 结构 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-69]{69}\inoutermargin{\darkred{69}}/ETEX
 typedef struct {
         WKArray *time_order;
         WKArray *spatial_order;
         WKArray *emissions;
 } XITie;
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-81]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-84]>/ETEX
 \stopC
 
 \noindent 每一个不同名字的片段都对应一个 \type{XITie} 类型的对象，其自身会被分别存储在 \type{time_order} 和  \type{spatial_order}。同名的片段会被以它们在文学程序中出现次序与逻辑次序（由片段运算符决定）分别存储在 \type{spatial_order} 和 \type{time_order} 中。\type{emissions} 存储片段的引用者。
@@ -1789,7 +1949,7 @@ typedef struct {
 将 \type{OrezTie} 对象加入有名片段关系表中时，所用的键是片段的名字，但是去除了所有空白字符（空格，缩进，换行符以及续行符）和一些特殊符号，辅助函数 \type{compact_text} 可完成此事，其定义为
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 有名片段关系表构建过程所需的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-67]{67}\inoutermargin{\darkred{67}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 有名片段关系表构建过程所需的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-70]{70}\inoutermargin{\darkred{70}}/ETEX
 static WKStr *compact_text(WKStr *a, WKArray *skipped_chars) {
         WKStr *b = wk_str(a->body);
         for (size_t i = 0; i < skipped_chars->n; i++) {
@@ -1798,19 +1958,19 @@ static WKStr *compact_text(WKStr *a, WKArray *skipped_chars) {
         }
         return b;
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-81]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-84]>/ETEX
 \stopC
 
 全局变量 \type{xi_skipped_chars_in_snippet_name} 存储了空白字符和续行符，专用作程序片段名中可忽略的字符集，其定义、初始化及释放过程如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 全局变量 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-68]{68}\inoutermargin{\darkred{68}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 全局变量 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-71]{71}\inoutermargin{\darkred{71}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
 WKArray *xi_skipped_chars_in_snippet_name;
-/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-129]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-131]>/ETEX
 \stopC
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 构造冗白字符集 xi_skipped_chars_in_snippet_name }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-69]{69}\inoutermargin{\darkred{69}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 构造冗白字符集 xi_skipped_chars_in_snippet_name }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-72]{72}\inoutermargin{\darkred{72}}/ETEX
 xi_skipped_chars_in_snippet_name = wk_array(const char *);
 wk_array_add(xi_skipped_chars_in_snippet_name, " ", const char *);
 wk_array_add(xi_skipped_chars_in_snippet_name, "　", const char *);
@@ -1823,13 +1983,13 @@ wk_array_add(xi_skipped_chars_in_snippet_name, "\'", const char *);
 wk_array_add(xi_skipped_chars_in_snippet_name, "\"", const char *);
 /* 如有需要，可继续添加 */
 /* ... ... ... */
-/BTEX=>\color[darkyellow]{ xi 核心过程 }<\in[xi-125]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 核心过程 }<\in[xi-127]>/ETEX
 \stopC
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi 进程资源回收 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-70]{70}\inoutermargin{\darkred{70}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi 进程资源回收 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-73]{73}\inoutermargin{\darkred{73}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
 wk_array_free(xi_skipped_chars_in_snippet_name);
-/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-129]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-131]>/ETEX
 \stopC
 
 \subsection[relations]{关系表初始化}
@@ -1837,10 +1997,10 @@ wk_array_free(xi_skipped_chars_in_snippet_name);
 对于语法树中任一有名片段节点 \type{x}，将其存入表 \type{relations} 的过程如下
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 有名片段关系表构建过程所需的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-71]{71}\inoutermargin{\darkred{71}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 有名片段关系表构建过程所需的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-74]{74}\inoutermargin{\darkred{74}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
 static void init_tie(WKTable *relations, WKBranch *x) {
         WKStr *x_name = NULL;
-        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 从 x 的子节点获取片段名并将其存于 x_name }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-72]>/ETEX
+        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 从 x 的子节点获取片段名并将其存于 x_name }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-75]>/ETEX
         if (!x_name) {
                 fprintf(stderr, "Line %lu: Illegal snipet.\n", first_token_line_number(x));
                 exit(EXIT_FAILURE);
@@ -1852,17 +2012,17 @@ static void init_tie(WKTable *relations, WKBranch *x) {
                 bool has_appending_operator = false;
                 bool has_prepending_operator = false;
                 WKStr *tag_ref = NULL;
-                /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 检测 x 是否含有标签引用和运算符 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-73]>/ETEX
+                /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 检测 x 是否含有标签引用和运算符 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-76]>/ETEX
                 if (tag_ref) {
                         WKStr *t = compact_text(tag_ref, xi_skipped_chars_in_snippet_name);
                         int id = -1;
-                        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 从时间（程序逻辑）序列中寻找与 t 相同的标签 -> id }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-74]>/ETEX
+                        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 从时间（程序逻辑）序列中寻找与 t 相同的标签 -> id }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-77]>/ETEX
                         /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 根据运算符，在时间序列中，}/ETEX\
-                          /BTEX\color[darkcyan]{将 x 插入到 t 对应的同名节点之前或之后 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-75]>/ETEX
+                          /BTEX\color[darkcyan]{将 x 插入到 t 对应的同名节点之前或之后 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-78]>/ETEX
                         wk_str_free(t);
                 } else {
                         /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 根据运算符，在时间序列中，}/ETEX\
-                          /BTEX\color[darkcyan]{将 x 插入到同名节点之前或之后 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-76]>/ETEX
+                          /BTEX\color[darkcyan]{将 x 插入到同名节点之前或之后 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-79]>/ETEX
                 }
                 wk_array_add(tie->spatial_order, x, WKBranch *);
                 wk_str_free(key);
@@ -1876,13 +2036,13 @@ static void init_tie(WKTable *relations, WKBranch *x) {
                 wk_table_add(relations, wk_pair(wk_box(key, WKStr *), wk_box(tie, XITie *)));
         }
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-81]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-84]>/ETEX
 \stopC
 
 \noindent 单从语法而言，\type{x} 的第 1 个子节点便应是片段名节点，但稳妥起见，获取片段名的过程依然是用了穷举的方式，且后续检测 \type{x} 是否含有标签引用和运算符的过程也沿袭此法。
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 从 x 的子节点获取片段名并将其存于 x_name }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-72]{72}\inoutermargin{\darkred{72}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 从 x 的子节点获取片段名并将其存于 x_name }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-75]{75}\inoutermargin{\darkred{75}}/ETEX
 for (size_t i = 0; i < x->lower->n; i++) {
         WKBranch *y = wk_array_get(x->lower, i, WKBranch *);
         XISyntax *y_syntax = wk_branch_get(y, XISyntax *);
@@ -1892,11 +2052,11 @@ for (size_t i = 0; i < x->lower->n; i++) {
                 break;
         }
 }
-/BTEX=>\color[darkyellow]{ 有名片段关系表构建过程所需的辅助函数 }<\in[xi-71]>/ETEX
+/BTEX=>\color[darkyellow]{ 有名片段关系表构建过程所需的辅助函数 }<\in[xi-74]>/ETEX
 \stopC
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 检测 x 是否含有标签引用和运算符 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-73]{73}\inoutermargin{\darkred{73}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 检测 x 是否含有标签引用和运算符 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-76]{76}\inoutermargin{\darkred{76}}/ETEX
 for (size_t i = 0; i < x->lower->n; i++) {
         WKBranch *y = wk_array_get(x->lower, i, WKBranch *);
         XISyntax *y_syntax = wk_branch_get(y, XISyntax *);
@@ -1913,13 +2073,13 @@ for (size_t i = 0; i < x->lower->n; i++) {
                 break;
         }
 }
-/BTEX=>\color[darkyellow]{ 有名片段关系表构建过程所需的辅助函数 }<\in[xi-71]>/ETEX
+/BTEX=>\color[darkyellow]{ 有名片段关系表构建过程所需的辅助函数 }<\in[xi-74]>/ETEX
 \stopC
 
 标签引用连同运算符 \type{+} 和 \type{^+} 所起的作用是确定同名片段在时间序列里的顺序。以下过程决定了，若一个含有标签的片段，若它在空间序列中位于 \type{x} 之后，则 \type{x} 无法通过标签和运算符确定 \type{x} 在时间序列中的位置，原因是前者尚未出现在 \type{x} 同名片段的时间序列里。
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 从时间（程序逻辑）序列中寻找与 t 相同的标签 -> id }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-74]{74}\inoutermargin{\darkred{74}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 从时间（程序逻辑）序列中寻找与 t 相同的标签 -> id }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-77]{77}\inoutermargin{\darkred{77}}/ETEX
 size_t hits = 0;
 for (int i = 0; i < tie->time_order->n; i++) {
         WKBranch *y = wk_array_get(tie->time_order, i, WKBranch *);
@@ -1945,12 +2105,12 @@ if (id < 0) {
         fprintf(stderr, "Line %lu: The referenced tag does not exist.\n", first_token_line_number(x));
         exit(EXIT_FAILURE);
 }
-/BTEX=>\color[darkyellow]{ 有名片段关系表构建过程所需的辅助函数 }<\in[xi-71]>/ETEX
+/BTEX=>\color[darkyellow]{ 有名片段关系表构建过程所需的辅助函数 }<\in[xi-74]>/ETEX
 \stopC
 
 \startC
 /BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 根据运算符，在时间序列中，}/ETEX\
-  /BTEX\color[darkred]{将 x 插入到 t 对应的同名节点之前或之后 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-75]{75}\inoutermargin{\darkred{75}}/ETEX
+  /BTEX\color[darkred]{将 x 插入到 t 对应的同名节点之前或之后 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-78]{78}\inoutermargin{\darkred{78}}/ETEX
 if (has_appending_operator) {
         wk_array_ins(tie->time_order, id + 1, x, WKBranch *);
 } else if (has_prepending_operator) {
@@ -1960,11 +2120,11 @@ if (has_appending_operator) {
                         first_token_line_number(x));
         exit(EXIT_FAILURE);
 }
-/BTEX=>\color[darkyellow]{ 有名片段关系表构建过程所需的辅助函数 }<\in[xi-71]>/ETEX
+/BTEX=>\color[darkyellow]{ 有名片段关系表构建过程所需的辅助函数 }<\in[xi-74]>/ETEX
 \stopC
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 根据运算符，在时间序列中，将 x 插入到同名节点之前或之后 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-76]{76}\inoutermargin{\darkred{76}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 根据运算符，在时间序列中，将 x 插入到同名节点之前或之后 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-79]{79}\inoutermargin{\darkred{79}}/ETEX
 if (has_appending_operator) {
         wk_array_add(tie->time_order, x, WKBranch *);
 } else if (has_prepending_operator) {
@@ -1974,7 +2134,7 @@ if (has_appending_operator) {
                         first_token_line_number(x));
         exit(EXIT_FAILURE);
 }
-/BTEX=>\color[darkyellow]{ 有名片段关系表构建过程所需的辅助函数 }<\in[xi-71]>/ETEX
+/BTEX=>\color[darkyellow]{ 有名片段关系表构建过程所需的辅助函数 }<\in[xi-74]>/ETEX
 \stopC
 
 \subsection{建立有名片段的引用关系}
@@ -1982,7 +2142,7 @@ if (has_appending_operator) {
 假设任一有名片段节点 \type{x}，其中含有对其他片段的引用 \type{a}，则以下过程可在有名片段关系表中为二者建立联系：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 有名片段关系表构建过程所需的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-77]{77}\inoutermargin{\darkred{77}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 有名片段关系表构建过程所需的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-80]{80}\inoutermargin{\darkred{80}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
 static void create_relation(WKTable *relations, WKBranch *x, XISyntax *a)
 {
         XIToken *t = wk_link_get(a->tokens->head, XIToken *);
@@ -1998,13 +2158,13 @@ static void create_relation(WKTable *relations, WKBranch *x, XISyntax *a)
         }
         wk_str_free(s);
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-81]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-84]>/ETEX
 \stopC
 
 基于 \type{init_tie} 和 \type{create_relation}，构造有名片段关系的完整过程如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 有名片段关系表构建过程所需的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-78]{78}\inoutermargin{\darkred{78}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 有名片段关系表构建过程所需的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-81]{81}\inoutermargin{\darkred{81}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
 /* root 为语法树根节点 */
 static WKTable *xi_create_relations(WKBranch *root) {
         WKTable *relations = wk_table(WKStr *, XITie *);
@@ -2028,7 +2188,7 @@ static WKTable *xi_create_relations(WKBranch *root) {
         }
         return relations;
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-81]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-84]>/ETEX
 \stopC
 
 \subsection{销毁关系表}
@@ -2036,15 +2196,15 @@ static WKTable *xi_create_relations(WKBranch *root) {
 关系表不再使用时，可使用 \type{wk_table_free} 予以销毁，但需要事先为表中键值对的值部分注册释放函数：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 为关系表注册 XITie 对象释放函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-79]{79}\inoutermargin{\darkred{79}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 为关系表注册 XITie 对象释放函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-82]{82}\inoutermargin{\darkred{82}}/ETEX
 wk_free_bus_connect("XITie *", xi_tie_box_free);
-/BTEX=>\color[darkyellow]{ xi 核心过程 }<\in[xi-125]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 核心过程 }<\in[xi-127]>/ETEX
 \stopC
 
 \noindent 其中 \type{xi_tie_box_free} 的定义如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ XITie 对象的释放函数：xi_tie_free  }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-80]{80}\inoutermargin{\darkred{80}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ XITie 对象的释放函数：xi_tie_free  }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-83]{83}\inoutermargin{\darkred{83}}/ETEX
 static void xi_tie_box_free(WKBox *tie_box) {
         XITie *tie = wk_box_get(tie_box, XITie *);
         wk_array_free(tie->spatial_order);
@@ -2053,7 +2213,7 @@ static void xi_tie_box_free(WKBox *tie_box) {
         free(tie);
         wk_box_free(tie_box);
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-81]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-84]>/ETEX
 \stopC
 
 \subsection{小结}
@@ -2061,17 +2221,17 @@ static void xi_tie_box_free(WKBox *tie_box) {
 汇集有名片段关系表构造过程的相关代码：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi 的数据结构与辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-81]{81}\inoutermargin{\darkred{81}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
-/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ XITie 结构 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-66]>/ETEX
-/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 有名片段关系表构建过程所需的辅助函数 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-67]>/ETEX/BTEX\ <\in[xi-71]>/ETEX/BTEX\ <\in[xi-77]>/ETEX/BTEX\ <\in[xi-78]>/ETEX
-/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ XITie 对象的释放函数：xi_tie_free }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-80]>/ETEX
-/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-129]>/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi 的数据结构与辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-84]{84}\inoutermargin{\darkred{84}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ XITie 结构 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-69]>/ETEX
+/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 有名片段关系表构建过程所需的辅助函数 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-70]>/ETEX/BTEX\ <\in[xi-74]>/ETEX/BTEX\ <\in[xi-80]>/ETEX/BTEX\ <\in[xi-81]>/ETEX
+/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ XITie 对象的释放函数：xi_tie_free }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-83]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-131]>/ETEX
 \stopC
 
 函数 \type{xi_print_relations} 用于输出有名片段关系表的构建结果，其定义为
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi_print_relations }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-82]{82}\inoutermargin{\darkred{82}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi_print_relations }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-85]{85}\inoutermargin{\darkred{85}}/ETEX
 static void xi_print_relations(WKTable *relations) {
         for (size_t i = 0; i < relations->body->n; i++) {
                 WKList *bucket = wk_array_get(relations->body, i, WKList *);
@@ -2110,7 +2270,7 @@ static void xi_print_relations(WKTable *relations) {
 上述代码所用的辅助函数 \type{print_snippet_name}，其定义为
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi_print_relations }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-83]{83}\inoutermargin{\darkred{83}}/ETEX/BTEX\ \color[darkgreen]{\bf $\wedge+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi_print_relations }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-86]{86}\inoutermargin{\darkred{86}}/ETEX/BTEX\ \color[darkgreen]{\bf $\wedge+$}\ /ETEX
 static void print_snippet_name(WKBranch *x) {
         for (size_t i = 0; i < x->lower->n; i++) {
                 WKBranch *it = wk_array_get(x->lower, i, WKBranch *);
@@ -2131,8 +2291,9 @@ static void print_snippet_name(WKBranch *x) {
 对于文学程序文件 \type{xi_file_path}，根据有名片段关系表 \type{relations}，以给定的入口 \type{entrance}——某个有名片段的名字，抽取片段所包含的所有内容——片段及其所引用的其他片段的内容。由于被某个片段引用的片段又可能引用其他片段，因此片段内容抽取过程是递归的，\type{xi_tangle} 实现了该过程。
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi_tangle }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-84]{84}\inoutermargin{\darkred{84}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi_tangle }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-87]{87}\inoutermargin{\darkred{87}}/ETEX
 static void xi_tangle(const char *xi_file_path,
+                      WKTree *syntax_tree,
                       WKTable *relations,
                       WKStr *entrance,
                       size_t begin, /* 区间开始 id */
@@ -2148,35 +2309,35 @@ static void xi_tangle(const char *xi_file_path,
         }
 	XITie *tie = wk_box_get(tie_box, XITie *);
         for (size_t i = 0; i < tie->time_order->n; i++) {
-                WKBranch *snippet = wk_array_get(tie->time_order, i, WKBranch *);
-                XISyntax *snippet_syntax = wk_branch_get(snippet, XISyntax *);
-                if (snippet_syntax->id < begin || snippet_syntax->id > end) continue;
-                WKBranch *body = wk_array_get(snippet->lower, snippet->lower->n - 1, WKBranch *);
-		for (size_t j = 0; j < body->lower->n; j++) {
-			WKBranch *it = wk_array_get(body->lower, j, WKBranch *);
-                        XISyntax *a = wk_branch_get(it, XISyntax *);
-                        XIToken *ta = wk_link_get(a->tokens->head, XIToken *);
-                        WKStr *text = ta->content;
+                WKBranch *x_bra = wk_array_get(tie->time_order, i, WKBranch *);
+                XISyntax *x = wk_branch_get(x_bra, XISyntax *);
+                if (x->id < begin || x->id > end) continue;
+                WKBranch *x_body_bra = wk_array_get(x_bra->lower, x_bra->lower->n - 1, WKBranch *);
+		for (size_t j = 0; j < x_body_bra->lower->n; j++) {
+			WKBranch *a_bra = wk_array_get(x_body_bra->lower, j, WKBranch *);
+                        XISyntax *a = wk_branch_get(a_bra, XISyntax *);
+                        XIToken *a_tok = wk_link_get(a->tokens->head, XIToken *);
                         if (a->type == XI_SNIPPET_REFERENCE) {
-                                /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 输出引用的片段内容 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-88]>/ETEX
+                                /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 输出引用的片段内容 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-91]>/ETEX
                         } else {
-                                /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 输出片段内普通文本 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-85]>/ETEX
+                                /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 输出片段内普通文本 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-88]>/ETEX
 			}
                 }
         }
         wk_str_free(key);
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-91]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-95]>/ETEX
 \stopC
 
 向文件写入片段内容时，构造一个缓冲区，收集待写入的内容，然后将其一次性写入文件。需要注意的是，有名片段的首尾通常各存在一个空行，它们的作用是在视觉上让有名片段的内容更加明显突出，在抽取片段内容时，需要将其忽略。另外，在收集内容之前，由于片段可能是被其他片段引用，在被引用处可能存在缩进，故而需要构造缩进文本，将其添加到片段内容的每一行的行首，从而形成整个片段的缩进，该过程对于含有诸如 Python、YAML 之类代码的片段是必须的。向文件写入片段内容的过程具体如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 输出片段内普通文本 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-85]{85}\inoutermargin{\darkred{85}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 输出片段内普通文本 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-88]{88}\inoutermargin{\darkred{88}}/ETEX
+WKStr *text = a_tok->content;
 WKStr *cache = wk_str(NULL);
 WKStr *current_indent = cascade_indents(indents); /* 将各层次的缩进串联起来 */
 if (show_line_number) {
-        size_t line = first_token_line_number(it);
+        size_t line = first_token_line_number(a_bra);
         const char *p = text->body;
         p = xi_skip(text->body, text->body + text->n, p, 1, xi_skipped_chars);
         if (*p == '\n') {
@@ -2214,13 +2375,13 @@ if (head < tail) {
 fputs(cache->body, output);
 wk_str_free(current_indent);
 wk_str_free(cache);
-/BTEX=>\color[darkyellow]{ xi_tangle }<\in[xi-84]>/ETEX
+/BTEX=>\color[darkyellow]{ xi_tangle }<\in[xi-87]>/ETEX
 \stopC
 
 串联各层次缩进的函数 \type{cascade_indents} 的定义如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 有名片段内容抽取过程所需的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-86]{86}\inoutermargin{\darkred{86}}/ETEX/BTEX\ \color[darkgreen]{\bf $\wedge+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 有名片段内容抽取过程所需的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-89]{89}\inoutermargin{\darkred{89}}/ETEX/BTEX\ \color[darkgreen]{\bf $\wedge+$}\ /ETEX
 static WKStr *cascade_indents(WKList *indents) {
         WKStr *current_indent = wk_str(NULL);
         for (WKLink *it = indents->head; it; it = it->next) {
@@ -2229,13 +2390,13 @@ static WKStr *cascade_indents(WKList *indents) {
         }
         return current_indent;
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-91]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-95]>/ETEX
 \stopC
 
 输出引用的片段内容，本质上是递归调用上述的片段内容的输出过程，但是需要为该过程构造正确的缩进层次，否则抽取的内容会出现缩进混乱的情况。引用的片段，其缩进即其前一个 \type{XI_SNIPPET_TEXT} 类型的节点最后一行空白文本，需提取该段文本，以添加到引用的片段内容除首行之外的每行行首，提取过程如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi_tangle }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-87]{87}\inoutermargin{\darkred{87}}/ETEX/BTEX\ \color[darkgreen]{\bf $\wedge+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi_tangle }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-90]{90}\inoutermargin{\darkred{90}}/ETEX/BTEX\ \color[darkgreen]{\bf $\wedge+$}\ /ETEX
 static WKStr *last_blank_line(XISyntax *a) {
         WKStr *blank_line = wk_str(NULL);
         XIToken *t = wk_link_get(a->tokens->head, XIToken *);
@@ -2253,112 +2414,137 @@ static WKStr *last_blank_line(XISyntax *a) {
         }
         return blank_line;
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-91]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-95]>/ETEX
 \stopC
 
 假设引用的片段为 \type{a}，其对应的语法节点为 \type{it}，则为其准备当前层次的缩进文本并递归调用 \type{xi_tangle} 实现引用的片段内容的提取过程为：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 输出引用的片段内容 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-88]{88}\inoutermargin{\darkred{88}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 输出引用的片段内容 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-91]{91}\inoutermargin{\darkred{91}}/ETEX
 if (j > 0) {
-	WKBranch *prev = wk_array_get(body->lower, j - 1, WKBranch *);
-        XISyntax *x = wk_branch_get(prev, XISyntax *);
-        if (x->type == XI_SNIPPET_TEXT) {
-                WKStr *blank_line = last_blank_line(x);
+        /* 获得缩进 */
+	WKBranch *prev = wk_array_get(x_body_bra->lower, j - 1, WKBranch *);
+        XISyntax *y = wk_branch_get(prev, XISyntax *);
+        if (y->type == XI_SNIPPET_TEXT) {
+                WKStr *blank_line = last_blank_line(y);
                 wk_list_prefix(indents, blank_line, WKStr *);
         }
-        XIToken *tx = wk_link_get(a->tokens->head, XIToken *);
-        xi_tangle(xi_file_path, relations, tx->content,
-                  begin, end, indents, show_line_number, output);
+        /* 获得切片下标 */
+        size_t u = 0, v = SIZE_MAX;
+        WKPair *slice = snippet_slice(syntax_tree, x, x_body_bra, &j);
+        u = wk_box_get(slice->x, size_t);
+        v = wk_box_get(slice->y, size_t);
+        wk_box_free(slice->x); wk_box_free(slice->y); wk_pair_free(slice);
+        /* 抽取代码 */
+        xi_tangle(xi_file_path, syntax_tree, relations,
+                  a_tok->content, u, v, indents, show_line_number, output);
         /* 删除当前层次的缩进 */
 	WKStr *current_indent = wk_link_get(indents->head, WKStr *);
         wk_str_free(current_indent);
 	wk_list_del(indents, indents->head);
 }
-/BTEX=>\color[darkyellow]{ xi_tangle }<\in[xi-84]>/ETEX
+/BTEX=>\color[darkyellow]{ xi_tangle }<\in[xi-87]>/ETEX
 \stopC
 
-注意，\type{xi_tangle} 所抽取的代码片段范围面向有名片段的 \type{id} 值。在使用 xi 程序从文学程序抽取代码时，用户更希望根据文档内容里的一些字句确定片段提取范围。为了满足该需求，以下实现一个字句范围到 \type{id} 范围的转换函数：
+注意，\type{xi_tangle} 所抽取的代码片段范围面向有名片段的 \type{id} 值。在使用 xi 程序从文学程序抽取代码时，用户更希望在片段引用后设定片段切片。片段切片的起止范围是基于片段标签引用设定的，需要将其转换为 \type{id} 范围：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 有名片段内容抽取过程所需的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-89]{89}\inoutermargin{\darkred{89}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
-static WKPair *snippet_area(WKTree *syntax_tree, const char *a, const char *b) {
-        /* 为了稳健，需对 a，b 予以压缩 */
-        WKStr *sa = wk_str(a);
-        WKStr *sb = wk_str(b);
-        WKStr *l = compact_text(sa, xi_skipped_chars_in_snippet_name);
-        WKStr *r = compact_text(sb, xi_skipped_chars_in_snippet_name);
-        /* 顺序遍历语法树第 2 层类型为 XI_SNIPPET 的节点，
-           查找含字符串 a 者并获取其 id */
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi_tangle }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-92]{92}\inoutermargin{\darkred{92}}/ETEX/BTEX\ \color[darkgreen]{\bf $\wedge+$}\ /ETEX
+static WKPair *snippet_slice(WKTree *syntax_tree, XISyntax *x, WKBranch *x_body, size_t *i) {
+        size_t u = 0, v = SIZE_MAX;
+        WKBranch *snippet_ref_bra = wk_array_get(x_body->lower, *i, WKBranch *);
+        XISyntax *snippet_ref = wk_branch_get(snippet_ref_bra, XISyntax *);
+        XIToken *snippet_ref_tok = wk_link_get(snippet_ref->tokens->head, XIToken *);
+        WKBranch *start_bra = wk_array_get(x_body->lower, *i + 1, WKBranch *);
+        XISyntax *start = wk_branch_get(start_bra, XISyntax *);
+        if (start->type == XI_SNIPPET_SLICE_START) {
+                XIToken *start_tok = wk_link_get(start->tokens->head, XIToken *);
+                if (strcmp(start_tok->content->body, "0") != 0) {
+                        if (strcmp(start_tok->content->body, "here") == 0) u = x->id;
+                        else {
+                                ssize_t id = get_snippet_id_by_tag(syntax_tree,
+                                                                   snippet_ref_tok->content,
+                                                                   start_tok->content);
+                                if (id > 0) u = id;
+                        }
+                }
+                WKBranch *stop_bra = wk_array_get(x_body->lower, *i + 2, WKBranch *);
+                XISyntax *stop = wk_branch_get(stop_bra, XISyntax *);
+                XIToken *stop_tok = wk_link_get(stop->tokens->head, XIToken *);
+                if (strcmp(stop_tok->content->body, "here") == 0) v = x->id;
+                else {
+                        ssize_t id = get_snippet_id_by_tag(syntax_tree,
+                                                           snippet_ref_tok->content,
+                                                           stop_tok->content);
+                        if (id > 0) v = id;
+                }
+                *i += 2;
+        }
+        WKPair *slice = wk_pair(wk_box(u, size_t), wk_box(v, size_t));
+        return slice;
+}
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-95]>/ETEX
+\stopC
+
+上述代码所用的 \type{get_snippet_id_by_tag} 函数可将片段引用标记转化为所引用的片段 \type{id}，该函数定义如下：
+
+\startC
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 有名片段内容抽取过程所需的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-93]{93}\inoutermargin{\darkred{93}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+static ssize_t get_snippet_id_by_tag(WKTree *syntax_tree, WKStr *snippet_name, WKStr *tag_name) {
+        WKStr *a = compact_text(snippet_name, xi_skipped_chars_in_snippet_name);
+        WKStr *a_tag = compact_text(tag_name, xi_skipped_chars_in_snippet_name);
         WKArray *level2 = syntax_tree->root->lower;
-        size_t u = 0;
-        size_t v = SIZE_MAX;
+        ssize_t id = -1;
         for (size_t i = 0; i < level2->n; i++) {
                 WKBranch *it = wk_array_get(level2, i, WKBranch *);
                 XISyntax *snippet = wk_branch_get(it, XISyntax *);
-                if (snippet->type == XI_SNIPPET) {
-                        WKStr *content = wk_link_get(snippet->tokens->head, XIToken *)->content;
-                        /* 对 content 压缩 */
-                        WKStr *target = compact_text(content, xi_skipped_chars_in_snippet_name);
-                        if (strstr(target->body, l->body)) {
-                                for (size_t j = i; j < level2->n; j++) {
-                                        WKBranch *it_j = wk_array_get(level2, j, WKBranch *);
-                                        XISyntax *snippet_j = wk_branch_get(it_j, XISyntax *);
-                                        if (snippet_j->type == XI_SNIPPET_WITH_NAME) {
-                                                u = snippet_j->id;
-                                                wk_str_free(target);
-                                                goto AREA_LEFT_DETERMINED;
-                                        }
-                                }
-                        }
-                        wk_str_free(target);
+                if (snippet->type != XI_SNIPPET_WITH_NAME) continue;
+                WKArray *level3 = it->lower;
+                WKBranch *x_bra = wk_array_get(level3, 0, WKBranch *);
+                XISyntax *x = wk_branch_get(x_bra, XISyntax *);
+                WKStr *x_content = wk_link_get(x->tokens->head, XIToken *)->content;
+                WKStr *b = compact_text(x_content, xi_skipped_chars_in_snippet_name);
+                if (strcmp(a->body, b->body) != 0) {
+                        wk_str_free(b);
+                        continue;
                 }
-        }
-AREA_LEFT_DETERMINED:
-        for (size_t i = level2->n; i > 0; i--) { /* 针对无符号下标的循环 */
-                WKBranch *it = wk_array_get(level2, i - 1, WKBranch *);
-                XISyntax *snippet = wk_branch_get(it, XISyntax *);
-                if (snippet->type == XI_SNIPPET) {
-                        WKStr *content = wk_link_get(snippet->tokens->head, XIToken *)->content;
-                        /* 对 content 压缩 */
-                        WKStr *target = compact_text(content, xi_skipped_chars_in_snippet_name);
-                        if (strstr(target->body, r->body)) {
-                                for (size_t j = i; j > 0; j--) {
-                                        WKBranch *it_j = wk_array_get(level2, j - 1, WKBranch *);
-                                        XISyntax *snippet_j = wk_branch_get(it_j, XISyntax *);
-                                        if (snippet_j->type == XI_SNIPPET_WITH_NAME) {
-                                                v = snippet_j->id;
-                                                wk_str_free(target);
-                                                goto AREA_RIGHT_DETERMINED;
-                                        }
-                                }
+                for (size_t j = 1; j < level3->n; j++) {
+                        WKBranch *it_j = wk_array_get(level3, j, WKBranch *);
+                        XISyntax *snippet_j = wk_branch_get(it_j, XISyntax *);
+                        if (snippet_j->type != XI_SNIPPET_TAG) continue;
+                        XIToken *b_tag_token = wk_link_get(snippet_j->tokens->head, XIToken *);
+                        WKStr *b_tag = compact_text(b_tag_token->content,
+                                                    xi_skipped_chars_in_snippet_name);
+                        if (strcmp(a_tag->body, b_tag->body) != 0) {
+                                wk_str_free(b_tag);
+                                continue;
                         }
-                        wk_str_free(target);
+                        id = snippet->id;
+                        wk_str_free(b_tag);
+                        break;
                 }
+                wk_str_free(b);
         }
-AREA_RIGHT_DETERMINED:
-        wk_str_free(sa);
-        wk_str_free(sb);
-        wk_str_free(l);
-        wk_str_free(r);
-        return wk_pair(wk_box(u, size_t), wk_box(v, size_t));
+        wk_str_free(a);
+        wk_str_free(a_tag);
+        return id;
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-91]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-95]>/ETEX
 \stopC
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 外境 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-90]{90}\inoutermargin{\darkred{90}}/ETEX/BTEX\ \color[darkgreen]{\bf $\wedge+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 外境 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-94]{94}\inoutermargin{\darkred{94}}/ETEX/BTEX\ \color[darkgreen]{\bf $\wedge+$}\ /ETEX
 #include <stdint.h> /* for SIZE_MAX */
-/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-129]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-131]>/ETEX
 \stopC
 
 汇集片段内容抽取过程的代码片段：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi 的数据结构与辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-91]{91}\inoutermargin{\darkred{91}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
-/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 有名片段内容抽取过程所需的辅助函数 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-86]>/ETEX/BTEX\ <\in[xi-89]>/ETEX
-/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ xi_tangle }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-84]>/ETEX/BTEX\ <\in[xi-87]>/ETEX
-/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-129]>/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi 的数据结构与辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-95]{95}\inoutermargin{\darkred{95}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 有名片段内容抽取过程所需的辅助函数 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-89]>/ETEX/BTEX\ <\in[xi-93]>/ETEX
+/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ xi_tangle }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-87]>/ETEX/BTEX\ <\in[xi-90]>/ETEX/BTEX\ <\in[xi-92]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-131]>/ETEX
 \stopC
 
 \section{编织}
@@ -2391,7 +2577,7 @@ Xi 不局限于排版语言，无名片段可直接输出，但是有名片段�
 \noindent 上述配置选项里的占位符，xi 在处理输出时，会用实际内容予以替换。这些选项构成的集合表示为以下结构体类型：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 记号 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-92]{92}\inoutermargin{\darkred{92}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 记号 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-96]{96}\inoutermargin{\darkred{96}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
 typedef struct {
         WKStr *snippet_start;
         WKStr *snippet_stop;
@@ -2412,13 +2598,13 @@ typedef struct {
 } XIFmt;
 
 XIFmt *xi_fmt;
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-41]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-44]>/ETEX
 \stopC
 
 Xi 配置文件中格式化输出配置选项的解析过程如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 配置文件解析 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-93]{93}\inoutermargin{\darkred{93}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 配置文件解析 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-97]{97}\inoutermargin{\darkred{97}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
 xi_fmt = malloc(sizeof(XIFmt));
 *xi_fmt = (XIFmt){ wk_str(NULL), wk_str(NULL), wk_str(NULL), wk_str(NULL),
                    wk_str(NULL), wk_str(NULL), wk_str(NULL), wk_str(NULL),
@@ -2459,13 +2645,13 @@ if (user_config) {
         wk_str_replace(xi_fmt->snippet_appending_operator, "\\n", "\n");
         wk_str_replace(xi_fmt->snippet_prepending_operator, "\\n", "\n");
 }
-/BTEX=>\color[darkyellow]{ xi 核心过程 }<\in[xi-125]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 核心过程 }<\in[xi-127]>/ETEX
 \stopC
 
 在 xi 进程退出时，需要回收 \type{xi_fmt} 各字段占用的内存：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi 进程资源回收 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-94]{94}\inoutermargin{\darkred{94}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi 进程资源回收 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-98]{98}\inoutermargin{\darkred{98}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
 wk_str_free(xi_fmt->snippet_start);
 wk_str_free(xi_fmt->snippet_stop);
 wk_str_free(xi_fmt->snippet_name_start);
@@ -2483,7 +2669,7 @@ wk_str_free(xi_fmt->snippet_emission);
 wk_str_free(xi_fmt->snippet_appending_operator);
 wk_str_free(xi_fmt->snippet_prepending_operator);
 free(xi_fmt);
-/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-129]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-131]>/ETEX
 \stopC
 
 \subsection{语言标记传播}
@@ -2493,7 +2679,7 @@ free(xi_fmt);
 辅助函数 \type{get_thread} 可从有名片段关系表中抽取指定线索：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 语言标记传播过程所需的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-95]{95}\inoutermargin{\darkred{95}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 语言标记传播过程所需的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-99]{99}\inoutermargin{\darkred{99}}/ETEX
 static void get_thread(WKTable *relations, WKStr *entrance, WKList *thread) {
         WKStr *key = compact_text(entrance, xi_skipped_chars_in_snippet_name);
         WKBox *tie_box = wk_table_query(relations, wk_box_ref(key, WKStr *));
@@ -2517,13 +2703,13 @@ static void get_thread(WKTable *relations, WKStr *entrance, WKList *thread) {
         }
         wk_str_free(key);
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-118]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-122]>/ETEX
 \stopC
 
 辅助函数 \type{spread_language_mark_in_thread} 实现任意一条线索中的有名片段的语言标记传播：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 语言标记传播过程所需的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-96]{96}\inoutermargin{\darkred{96}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 语言标记传播过程所需的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-100]{100}\inoutermargin{\darkred{100}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
 static void spread_language_mark_in_thread(WKTree *xi_tree, WKList *thread) {
         XIToken *language_token = NULL;
         for (WKLink *it = thread->head; it; it = it->next) {
@@ -2545,17 +2731,17 @@ static void spread_language_mark_in_thread(WKTree *xi_tree, WKList *thread) {
                                                 language_token_a->line_number);
                         }
                 } else {
-                        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 构造语言标记节点 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-98]>/ETEX
+                        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 构造语言标记节点 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-102]>/ETEX
                 }
         }
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-118]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-122]>/ETEX
 \stopC
 
 上述代码中使用的 \type{find_language_token} 函数可从语法树中的有名片段节点中搜索语法标记，其定义如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 语言标记传播过程所需的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-97]{97}\inoutermargin{\darkred{97}}/ETEX/BTEX\ \color[darkgreen]{\bf $\wedge+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 语言标记传播过程所需的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-101]{101}\inoutermargin{\darkred{101}}/ETEX/BTEX\ \color[darkgreen]{\bf $\wedge+$}\ /ETEX
 static XIToken *find_language_token(WKBranch *x) {
         XIToken *language_token = NULL;
         for (size_t i = 0; i < x->lower->n; i++) {
@@ -2568,13 +2754,13 @@ static XIToken *find_language_token(WKBranch *x) {
         }
         return language_token;
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-118]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-122]>/ETEX
 \stopC
 
 对于不存在语言标记的有名片段，为其构造语言标记节点的过程如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 构造语言标记节点 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-98]{98}\inoutermargin{\darkred{98}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 构造语言标记节点 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-102]{102}\inoutermargin{\darkred{102}}/ETEX
 XIToken *new_language_token = malloc(sizeof(XIToken));
 new_language_token->type = XI_TEXT;
 new_language_token->content = wk_str(language_token->content->body);
@@ -2594,13 +2780,13 @@ new_language->id = 0;
 wk_list_suffix(new_language->tokens, new_language_token, XIToken *);
 /* 新节点会作为 x 的第 2 个节点 */
 wk_tree_ins(xi_tree, x, 1, new_language, XISyntax *);
-/BTEX=>\color[darkyellow]{ 语言标记传播过程所需的辅助函数 }<\in[xi-96]>/ETEX
+/BTEX=>\color[darkyellow]{ 语言标记传播过程所需的辅助函数 }<\in[xi-100]>/ETEX
 \stopC
 
 在语法树中所有的有名节点中传播语言标记的过程由辅助函数 \type{spread_language_mark} 实现：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 语言标记传播过程所需的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-99]{99}\inoutermargin{\darkred{99}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 语言标记传播过程所需的辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-103]{103}\inoutermargin{\darkred{103}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
 static void spread_language_mark(WKTree *xi_tree, WKTable *relations) {
         for (size_t i = 0; i < xi_tree->root->lower->n; i++) {
                 WKBranch *it = wk_array_get(xi_tree->root->lower, i, WKBranch *);
@@ -2618,7 +2804,7 @@ static void spread_language_mark(WKTree *xi_tree, WKTable *relations) {
                 }
         }
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-118]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-122]>/ETEX
 \stopC
 
 \subsection{直接输出}
@@ -2626,7 +2812,7 @@ static void spread_language_mark(WKTree *xi_tree, WKTable *relations) {
 设 xi 语法树第二层节点中任一节点 \type{x}，若为无名片段，则原样输出其内容，若为有名片段，则基于配置文件里的设定，格式化输出其内容。该过程以辅助函数 \type{xi_weave} 实现，如下
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi_weave }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-100]{100}\inoutermargin{\darkred{100}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi_weave }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-104]{104}\inoutermargin{\darkred{104}}/ETEX
 static void xi_weave(WKTree *xi_tree, WKTable *relations, FILE *output) {
         for (size_t i = 0; i < xi_tree->root->lower->n; i++) {
                 WKBranch *x = wk_array_get(xi_tree->root->lower, i, WKBranch *);
@@ -2635,23 +2821,23 @@ static void xi_weave(WKTree *xi_tree, WKTable *relations, FILE *output) {
                         XIToken *x_token = wk_link_get(x_syntax->tokens->head, XIToken *);
                         fprintf(output, "%s", x_token->content->body);
                 } else {
-                        output_snippet_with_name(x, relations, output);
+                        output_snippet_with_name(xi_tree, x, relations, output);
                 }
         }
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-118]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-122]>/ETEX
 \stopC
 
 \noindent 上述代码中用于输出有名片段内容的辅助函数 \type{output_snippet_with_name}，其实现如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi_weave }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-101]{101}\inoutermargin{\darkred{101}}/ETEX/BTEX\ \color[darkgreen]{\bf $\wedge+$}\ /ETEX
-static void output_snippet_with_name(WKBranch *x, WKTable *relations, FILE *output) {
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi_weave }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-105]{105}\inoutermargin{\darkred{105}}/ETEX/BTEX\ \color[darkgreen]{\bf $\wedge+$}\ /ETEX
+static void output_snippet_with_name(WKTree *syntax_tree, WKBranch *x, WKTable *relations, FILE *output) {
         XISyntax *x_syntax = wk_branch_get(x, XISyntax *);
         WKStr *x_name = NULL;
         WKStr *x_id = wk_str(NULL);
         wk_str_printf(x_id, "%lu", x_syntax->id);
-        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 输出片段开始标记 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-102]>/ETEX
+        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 输出片段开始标记 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-106]>/ETEX
         for (size_t i = 0; i < x->lower->n; i++) {
                 WKBranch *y = wk_array_get(x->lower, i, WKBranch *);
                 XISyntax *y_syntax = wk_branch_get(y, XISyntax *);
@@ -2659,37 +2845,37 @@ static void output_snippet_with_name(WKBranch *x, WKTable *relations, FILE *outp
                                    wk_link_get(y_syntax->tokens->head, XIToken *) : NULL;
                 switch (y_syntax->type) {
                 case XI_SNIPPET_NAME:
-                        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 输出片段名 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-104]>/ETEX
+                        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 输出片段名 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-108]>/ETEX
                         break;
                 case XI_SNIPPET_TAG_REFERENCE:
-                        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 输出片段标签引用 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-106]>/ETEX
+                        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 输出片段标签引用 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-110]>/ETEX
                         break;
                 case XI_SNIPPET_APPENDING_OPERATOR:
-                        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 输出向后追加运算符 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-107]>/ETEX
+                        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 输出向后追加运算符 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-111]>/ETEX
                         break;
                 case XI_SNIPPET_PREPENDING_OPERATOR:
-                        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 输出向前追加运算符 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-108]>/ETEX
+                        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 输出向前追加运算符 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-112]>/ETEX
                         break;
                 case XI_SNIPPET_TAG:
-                        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 输出片段标签 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-109]>/ETEX
+                        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 输出片段标签 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-113]>/ETEX
                         break;
                 case XI_SNIPPET_CONTENT:
-                        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 输出片段内容 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-110]>/ETEX
+                        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 输出片段内容 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-114]>/ETEX
                         break;
                 default: ;
                 }
         }
-        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 输出片段的引用者 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-112]>/ETEX
-        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 输出片段结束标记 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-103]>/ETEX
+        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 输出片段的引用者 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-116]>/ETEX
+        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 输出片段结束标记 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-107]>/ETEX
         wk_str_free(x_id);
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-118]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-122]>/ETEX
 \stopC
 
 若用户提供了片段开始和结束标记，则将可能存在的占位符 \type{${language}} 替换为片段语言记号的内容，否则以片段界限符作为片段起始且忽略结束标记。
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 输出片段开始标记 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-102]{102}\inoutermargin{\darkred{102}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 输出片段开始标记 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-106]{106}\inoutermargin{\darkred{106}}/ETEX
 if (xi_fmt->snippet_start->n > 0) {
         XIToken *language = find_language_token(x);
         WKStr *a = wk_str(xi_fmt->snippet_start->body);
@@ -2699,11 +2885,11 @@ if (xi_fmt->snippet_start->n > 0) {
         fprintf(output, "%s", a->body);
         wk_str_free(a);
 }
-/BTEX=>\color[darkyellow]{ xi_weave }<\in[xi-101]>/ETEX
+/BTEX=>\color[darkyellow]{ xi_weave }<\in[xi-105]>/ETEX
 \stopC
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 输出片段结束标记 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-103]{103}\inoutermargin{\darkred{103}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 输出片段结束标记 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-107]{107}\inoutermargin{\darkred{107}}/ETEX
 if (xi_fmt->snippet_stop->n > 0) {
         XIToken *language = find_language_token(x);
         WKStr *a = wk_str(xi_fmt->snippet_stop->body);
@@ -2713,13 +2899,13 @@ if (xi_fmt->snippet_stop->n > 0) {
         fprintf(output, "%s", a->body);
         wk_str_free(a);
 }
-/BTEX=>\color[darkyellow]{ xi_weave }<\in[xi-101]>/ETEX
+/BTEX=>\color[darkyellow]{ xi_weave }<\in[xi-105]>/ETEX
 \stopC
 
 若用户提供了片段名标记，则将可能存在的占位符 \type{${name}} 和 \type{${id}} 替换为片段名及序号，否则只输出片段名以及片段名字界限符。片段名输出过程如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 输出片段名 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-104]{104}\inoutermargin{\darkred{104}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 输出片段名 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-108]{108}\inoutermargin{\darkred{108}}/ETEX
 x_name = y_token->content; /* 保存片段名，留待输出片段引用者时用 */
 if (xi_fmt->snippet_name->n > 0) {
         WKArray *segments = snippet_name_split(x_name);
@@ -2766,13 +2952,13 @@ if (xi_fmt->snippet_name->n > 0) {
                        xi_symbols->snippet_delimiter->body,
                        y_token->content->body,
                        xi_symbols->snippet_name_delimiter->body);
-/BTEX=>\color[darkyellow]{ xi_weave }<\in[xi-101]>/ETEX
+/BTEX=>\color[darkyellow]{ xi_weave }<\in[xi-105]>/ETEX
 \stopC
 
 \noindent 上述代码使用的 \type{snippet_name_split} 函数，是以续行符及其下一行的前导空白字符作为界限分割片段名，其定义如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi_weave }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-105]{105}\inoutermargin{\darkred{105}}/ETEX/BTEX\ \color[darkgreen]{\bf $\wedge+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi_weave }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-109]{109}\inoutermargin{\darkred{109}}/ETEX/BTEX\ \color[darkgreen]{\bf $\wedge+$}\ /ETEX
 WKArray *snippet_name_split(WKStr *name) {
         WKStr *continuation = xi_symbols->snippet_name_continuation;
         WKArray *segments = wk_array(WKStr *);
@@ -2836,13 +3022,13 @@ WKArray *snippet_name_split(WKStr *name) {
         wk_str_free(quad);
         return segments;
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-118]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-122]>/ETEX
 \stopC
 
 若用户提供了片段标签标记，则需要替换 \type{${id}} 和 \type{${name}}，否则输出默认的标签引用形式：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 输出片段标签引用 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-106]{106}\inoutermargin{\darkred{106}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 输出片段标签引用 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-110]{110}\inoutermargin{\darkred{110}}/ETEX
 if (xi_fmt->snippet_tag_reference->n > 0) {
         WKStr *a = wk_str(xi_fmt->snippet_tag_reference->body);
         wk_str_replace(a, "${id}", x_id->body);
@@ -2855,53 +3041,53 @@ if (xi_fmt->snippet_tag_reference->n > 0) {
                         y_token->content->body,
                         xi_symbols->tag_stop_mark->body);
 }
-/BTEX=>\color[darkyellow]{ xi_weave }<\in[xi-101]>/ETEX
+/BTEX=>\color[darkyellow]{ xi_weave }<\in[xi-105]>/ETEX
 \stopC
 
 向后与向前追加运算符标记可由用户定义，也可使用 xi 默认符号：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 输出向后追加运算符 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-107]{107}\inoutermargin{\darkred{107}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 输出向后追加运算符 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-111]{111}\inoutermargin{\darkred{111}}/ETEX
 if (xi_fmt->snippet_appending_operator->n > 0) {
         fprintf(output, "%s", xi_fmt->snippet_appending_operator->body);
 } else fprintf(output, " %s", xi_symbols->snippet_appending_mark->body);
-/BTEX=>\color[darkyellow]{ xi_weave }<\in[xi-101]>/ETEX
+/BTEX=>\color[darkyellow]{ xi_weave }<\in[xi-105]>/ETEX
 \stopC
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 输出向前追加运算符 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-108]{108}\inoutermargin{\darkred{108}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 输出向前追加运算符 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-112]{112}\inoutermargin{\darkred{112}}/ETEX
 if (xi_fmt->snippet_prepending_operator->n > 0) {
         fprintf(output, "%s", xi_fmt->snippet_prepending_operator->body);
 } else fprintf(output, " %s", xi_symbols->snippet_prepending_mark->body);
-/BTEX=>\color[darkyellow]{ xi_weave }<\in[xi-101]>/ETEX
+/BTEX=>\color[darkyellow]{ xi_weave }<\in[xi-105]>/ETEX
 \stopC
 
 片段标签格式化过程与其引用形式近乎相同：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 输出片段标签 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-109]{109}\inoutermargin{\darkred{109}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 输出片段标签 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-113]{113}\inoutermargin{\darkred{113}}/ETEX
 do {
         XIToken *tag_token = wk_link_get(y_syntax->tokens->head, XIToken *);
         if (xi_fmt->snippet_tag->n > 0) {
                 WKStr *a = wk_str(xi_fmt->snippet_tag->body);
                 wk_str_replace(a, "${id}", x_id->body);
                 wk_str_replace(a, "${name}", tag_token->content->body);
-                fprintf(output, "%s", a->body);
+                fprintf(output, "\n%s", a->body);
                 wk_str_free(a);
         } else {
-                fprintf(output, " %s%s%s",
+                fprintf(output, "\n%s%s%s",
                                 xi_symbols->tag_start_mark->body,
                                 tag_token->content->body,
                                 xi_symbols->tag_stop_mark->body);
         }
 } while (0);
-/BTEX=>\color[darkyellow]{ xi_weave }<\in[xi-101]>/ETEX
+/BTEX=>\color[darkyellow]{ xi_weave }<\in[xi-105]>/ETEX
 \stopC
 
 片段的内容是在 \type{x} 的下层节点里，且只有两种类型 \type{XI_TEXT} 与 \type{XI_SNIPPET_REFERENCE}，其输出过程如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 输出片段内容 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-110]{110}\inoutermargin{\darkred{110}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 输出片段内容 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-114]{114}\inoutermargin{\darkred{114}}/ETEX
 for (size_t j = 0; j < y->lower->n; j++) {
         WKBranch *z = wk_array_get(y->lower, j, WKBranch *);
         XISyntax *z_syntax = wk_branch_get(z, XISyntax *);
@@ -2913,20 +3099,20 @@ for (size_t j = 0; j < y->lower->n; j++) {
                 WKBox *tie_box = wk_table_query(relations, wk_box_ref(key, WKStr *));
                 wk_str_free(key);
                 if (tie_box) {
-                        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 输出片段引用 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-111]>/ETEX
+                        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 输出片段引用 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-115]>/ETEX
                 } else {
                         fprintf(stderr, "Line %lu: the snippet <%s> not defined!\n",
                                         z_token->line_number, z_token->content->body);
                 }
         }
 }
-/BTEX=>\color[darkyellow]{ xi_weave }<\in[xi-101]>/ETEX
+/BTEX=>\color[darkyellow]{ xi_weave }<\in[xi-105]>/ETEX
 \stopC
 
 上述代码中的片段引用部分的输出代码如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 输出片段引用 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-111]{111}\inoutermargin{\darkred{111}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 输出片段引用 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-115]{115}\inoutermargin{\darkred{115}}/ETEX
 XITie *tie = wk_box_get(tie_box, XITie *);
 if (xi_fmt->snippet_reference->n > 0) {
         WKArray *segments = snippet_name_split(z_token->content);
@@ -2935,9 +3121,9 @@ if (xi_fmt->snippet_reference->n > 0) {
         } else {
                 fprintf(output, "%s", xi_symbols->snippet_reference_start_mark->body);
         }
-        for (size_t j = 0; j < segments->n; j++) {
-                WKStr *segment = wk_array_get(segments, j, WKStr *);
-                if (j % 2 == 0) {
+        for (size_t k = 0; k < segments->n; k++) {
+                WKStr *segment = wk_array_get(segments, k, WKStr *);
+                if (k % 2 == 0) {
                         WKStr *snippet_name_t = wk_str(xi_fmt->snippet_reference->body);
                         wk_str_replace(snippet_name_t, "${name}", segment->body);
                         fprintf(output, "%s", snippet_name_t->body);
@@ -2960,32 +3146,41 @@ if (xi_fmt->snippet_reference->n > 0) {
         } else {
                 fprintf(output, "%s", xi_symbols->snippet_reference_stop_mark->body);
         }
-        WKStr *z_id = wk_str(NULL);
+        /* 获得切片下标 */
+        size_t u = 0, v = SIZE_MAX;
+        WKPair *slice = snippet_slice(syntax_tree, x_syntax, y, &j);
+        u = wk_box_get(slice->x, size_t);
+        v = wk_box_get(slice->y, size_t);
+        wk_box_free(slice->x); wk_box_free(slice->y); wk_pair_free(slice);
+        /* 输出片段 id 序列 */
+        WKStr *z_id_text = wk_str(NULL);
         for (size_t k = 0; k < tie->spatial_order->n; k++) {
-                WKBranch *z_ref = wk_array_get(tie->spatial_order, k, WKBranch *);
-                XISyntax *z_ref_syntax = wk_branch_get(z_ref, XISyntax *);
-                wk_str_printf(z_id, "%lu", z_ref_syntax->id);
+                WKBranch *z_bra = wk_array_get(tie->spatial_order, k, WKBranch *);
+                XISyntax *z = wk_branch_get(z_bra, XISyntax *);
+                size_t z_id = z->id;
+                if (z_id < u || z_id > v) continue;
+                wk_str_printf(z_id_text, "%lu", z_id);
                 if (xi_fmt->snippet_reference_id->n > 0) {
-                        WKStr *ref_id = wk_str(xi_fmt->snippet_reference_id->body);
-                        wk_str_replace(ref_id, "${id}", z_id->body);
-                        fprintf(output, "%s", ref_id->body);
-                        wk_str_free(ref_id);
+                        WKStr *z_id_fmt = wk_str(xi_fmt->snippet_reference_id->body);
+                        wk_str_replace(z_id_fmt, "${id}", z_id_text->body);
+                        fprintf(output, "%s", z_id_fmt->body);
+                        wk_str_free(z_id_fmt);
                 }
         }
-        wk_str_free(z_id);
+        wk_str_free(z_id_text);
 } else {
         fprintf(output, "%s%s%s",
                          xi_symbols->snippet_reference_start_mark->body,
                          z_token->content->body,
                          xi_symbols->snippet_reference_stop_mark->body);
 }
-/BTEX=>\color[darkyellow]{ 输出片段内容 }<\in[xi-110]>/ETEX
+/BTEX=>\color[darkyellow]{ 输出片段内容 }<\in[xi-114]>/ETEX
 \stopC
 
 如果片段 \type{x} 存在引用者，则将其格式化输出，过程如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 输出片段的引用者 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-112]{112}\inoutermargin{\darkred{112}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 输出片段的引用者 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-116]{116}\inoutermargin{\darkred{116}}/ETEX
 if (xi_fmt->snippet_emission->n > 0) {
         WKStr *x_key = compact_text(x_name, xi_skipped_chars_in_snippet_name);
         WKBox *tie_box = wk_table_query(relations, wk_box_ref(x_key, WKStr *));
@@ -3013,7 +3208,7 @@ if (xi_fmt->snippet_emission->n > 0) {
         }
         wk_str_free(x_key);
 }
-/BTEX=>\color[darkyellow]{ xi_weave }<\in[xi-101]>/ETEX
+/BTEX=>\color[darkyellow]{ xi_weave }<\in[xi-105]>/ETEX
 \stopC
 
 \subsection{YAML 输出}
@@ -3063,7 +3258,7 @@ if (xi_fmt->snippet_emission->n > 0) {
 输出 YAML 格式数据的函数是 \type{xi_yaml_output}，其定义如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi_yaml_output }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-113]{113}\inoutermargin{\darkred{113}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi_yaml_output }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-117]{117}\inoutermargin{\darkred{117}}/ETEX
 static void xi_yaml_output(WKTree *xi_tree,
                            WKTable *relations,
                            XIFmt *fmt,
@@ -3079,17 +3274,18 @@ static void xi_yaml_output(WKTree *xi_tree,
                         yaml_output_multilines(output, x_token->content->body, "    ");
                         fprintf(output, "'\n");
                 } else {
-                        snippet_with_name_to_yaml(x, relations, fmt, output);
+                        snippet_with_name_to_yaml(xi_tree, x, relations, fmt, output);
                 }
         }
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-118]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-122]>/ETEX
 \stopC
 
 \noindent 上述代码以 YAML 格式输出无名片段内容时，若内容存在多行文本，则每次换行时，下一行的行首必须流出足够的缩进，否则无法构成合法的 YAML 跨行文本。辅助函数 \type{yaml_output_multilines} 专用于输出符合 YAML 格式的跨行文本，其定义如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi_yaml_output }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-114]{114}\inoutermargin{\darkred{114}}/ETEX/BTEX\ \color[darkgreen]{\bf $\wedge+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi_yaml_output }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-118]{118}\inoutermargin{\darkred{118}}/ETEX/BTEX\ \color[darkgreen]{\bf $\wedge+$}\ /ETEX
+
 /BTEX\color[darkmagenta]{<yaml-output-multilines>}/ETEX
 static void yaml_output_multilines(FILE *output, const char *text, const char *indent) {
         WKStr *cache = wk_str(NULL);
@@ -3104,14 +3300,15 @@ static void yaml_output_multilines(FILE *output, const char *text, const char *i
         if (cache->n > 0) fprintf(output, "%s", cache->body);
         wk_str_free(cache);
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-118]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-122]>/ETEX
 \stopC
 
 在 \type{xi_yaml_output} 定义中所用的辅助函数 \type{snippet_with_name_to_yaml} 可格式化输出有名片段的内容，其定义如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi_yaml_output }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-115]{115}\inoutermargin{\darkred{115}}/ETEX/BTEX\color[darkmagenta]{\ <yaml-output-multilines>\ }/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
-static void snippet_with_name_to_yaml(WKBranch *x,
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi_yaml_output }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-119]{119}\inoutermargin{\darkred{119}}/ETEX/BTEX\color[darkmagenta]{\ <yaml-output-multilines>\ }/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+static void snippet_with_name_to_yaml(WKTree *syntax_tree,
+                                      WKBranch *x,
                                       WKTable *relations,
                                       XIFmt *fmt,
                                       FILE *output) {
@@ -3149,63 +3346,71 @@ static void snippet_with_name_to_yaml(WKBranch *x,
                         fprintf(output, "  tag: '%s'\n", y_token->content->body);
                         break;
                 case XI_SNIPPET_CONTENT:
-                        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ YAML 格式化：片段内容 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-116]>/ETEX
+                        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ YAML 格式化：片段内容 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-120]>/ETEX
                         break;
                 default: ;
                 }
         }
-        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ YAML 格式化：片段的引用者 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-117]>/ETEX
+        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ YAML 格式化：片段的引用者 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-121]>/ETEX
         wk_str_free(x_id);
 }
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-118]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-122]>/ETEX
 \stopC
 
 \noindent 上述代码中，片段内容的 YAML 格式输出过程如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ YAML 格式化：片段内容 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-116]{116}\inoutermargin{\darkred{116}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ YAML 格式化：片段内容 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-120]{120}\inoutermargin{\darkred{120}}/ETEX
 fprintf(output, "  content:\n");
 for (size_t j = 0; j < y->lower->n; j++) {
         WKBranch *z = wk_array_get(y->lower, j, WKBranch *);
         XISyntax *z_syntax = wk_branch_get(z, XISyntax *);
-        XIToken *z_token = wk_link_get(z_syntax->tokens->head, XIToken *);
+        XIToken *z_tok = wk_link_get(z_syntax->tokens->head, XIToken *);
         if (z_syntax->type == XI_SNIPPET_TEXT) {
                 fprintf(output, "    - type: text\n"
                                 "      data: |-\n"
                                 "        '");
-                yaml_output_multilines(output, z_token->content->body, "        ");
+                yaml_output_multilines(output, z_tok->content->body, "        ");
                 fprintf(output, "'\n");
-        } else {
-                WKStr *key = compact_text(z_token->content, xi_skipped_chars_in_snippet_name);
+        } else if (z_syntax->type == XI_SNIPPET_REFERENCE) {
+                WKStr *key = compact_text(z_tok->content, xi_skipped_chars_in_snippet_name);
                 WKBox *tie_box = wk_table_query(relations, wk_box_ref(key, WKStr *));
                 fprintf(output, "    - type: snippet-reference\n");
                 if (tie_box) {
                         XITie *tie = wk_box_get(tie_box, XITie *);
                         fprintf(output, "      name: |-\n"
                                         "        '");
-                        yaml_output_multilines(output, z_token->content->body, "        ");
+                        yaml_output_multilines(output, z_tok->content->body, "        ");
                         fprintf(output, "'\n"
                                         "      ids:\n");
+                        /* 获得切片下标 */
+                        size_t u = 0, v = SIZE_MAX;
+                        WKPair *slice = snippet_slice(syntax_tree, x_syntax, y, &j);
+                        u = wk_box_get(slice->x, size_t);
+                        v = wk_box_get(slice->y, size_t);
+                        wk_box_free(slice->x); wk_box_free(slice->y); wk_pair_free(slice);
+                        /* 输出所引用的片段 id */
                         for (size_t k = 0; k < tie->spatial_order->n; k++) {
                                 WKBranch *z_ref = wk_array_get(tie->spatial_order, k, WKBranch *);
                                 XISyntax *z_ref_syntax = wk_branch_get(z_ref, XISyntax *);
+                                if (z_ref_syntax->id < u ||  z_ref_syntax->id > v) continue;
                                 fprintf(output, "        - %lu\n", z_ref_syntax->id);
                         }
                 } else {
                         fprintf(stderr, "Line %lu: the snippet <%s> not defined!\n",
-                                        z_token->line_number, z_token->content->body);
+                                        z_tok->line_number, z_tok->content->body);
 
                 }
                 wk_str_free(key);
-        }
+        } else ;
 }
-/BTEX=>\color[darkyellow]{ xi_yaml_output }<\in[xi-115]>/ETEX
+/BTEX=>\color[darkyellow]{ xi_yaml_output }<\in[xi-119]>/ETEX
 \stopC
 
 上述辅助函数 \type{snippet_with_name_to_yaml} 中的片段引用者集合的格式化过程如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ YAML 格式化：片段的引用者 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-117]{117}\inoutermargin{\darkred{117}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ YAML 格式化：片段的引用者 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-121]{121}\inoutermargin{\darkred{121}}/ETEX
 WKStr *x_key = compact_text(x_name, xi_skipped_chars_in_snippet_name);
 WKBox *tie_box = wk_table_query(relations, wk_box_ref(x_key, WKStr *));
 if (tie_box) {
@@ -3225,7 +3430,7 @@ if (tie_box) {
         }
 }
 wk_str_free(x_key);
-/BTEX=>\color[darkyellow]{ xi_yaml_output }<\in[xi-115]>/ETEX
+/BTEX=>\color[darkyellow]{ xi_yaml_output }<\in[xi-119]>/ETEX
 \stopC
 
 \subsection{小结}
@@ -3233,11 +3438,11 @@ wk_str_free(x_key);
 将格式化输出函数汇入 xi 的辅助函数集：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi 的数据结构与辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-118]{118}\inoutermargin{\darkred{118}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
-/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 语言标记传播过程所需的辅助函数 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-95]>/ETEX/BTEX\ <\in[xi-96]>/ETEX/BTEX\ <\in[xi-97]>/ETEX/BTEX\ <\in[xi-99]>/ETEX
-/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ xi_weave }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-100]>/ETEX/BTEX\ <\in[xi-101]>/ETEX/BTEX\ <\in[xi-105]>/ETEX
-/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ xi_yaml_output }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-113]>/ETEX/BTEX\ <\in[xi-114]>/ETEX/BTEX\ <\in[xi-115]>/ETEX
-/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-129]>/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi 的数据结构与辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-122]{122}\inoutermargin{\darkred{122}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 语言标记传播过程所需的辅助函数 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-99]>/ETEX/BTEX\ <\in[xi-100]>/ETEX/BTEX\ <\in[xi-101]>/ETEX/BTEX\ <\in[xi-103]>/ETEX
+/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ xi_weave }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-104]>/ETEX/BTEX\ <\in[xi-105]>/ETEX/BTEX\ <\in[xi-109]>/ETEX
+/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ xi_yaml_output }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-117]>/ETEX/BTEX\ <\in[xi-118]>/ETEX/BTEX\ <\in[xi-119]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-131]>/ETEX
 \stopC
 
 \section{界面}
@@ -3248,8 +3453,6 @@ Xi 的最终形式是一个命令行程序，拥有以下命令选项：
 \item \type{--tangle} 或 \type{-t}，用于抽取代码片段；
 \item \type{--entrance} 或 \type{-e}，与 \type{--tangle} 配合使用，用于指定待提取代码片段的名称；
 \item \type{--line} 或 \type{-l}，用于开启所提取代码片段在文学程序中对应的行号；
-\item \type{--beginning} 或 \type{-B}，用于设定代码片段抽取范围的开始区域；
-\item \type{--end} 或 \type{-E}，用于设定代码片段抽取范围的终止区域；
 \item \type{--weave} 或 \type{-w}，用于构建文学程序排版文档；
 \item \type{--yaml} 或 \type{-y}，用于开启 xi 的 YAML 文档输出模式;
 \item \type{--config} 或 \type{-c}，用于指定 xi 配置文件的路径；
@@ -3260,21 +3463,19 @@ Xi 的最终形式是一个命令行程序，拥有以下命令选项：
 可使用 WK 库的 WKCfg 模块解析这些命令选项。首先载入该模块的头文件：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 外境 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-119]{119}\inoutermargin{\darkred{119}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 外境 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-123]{123}\inoutermargin{\darkred{123}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
 #include <wk-cli.h>
-/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-129]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-131]>/ETEX
 \stopC
 
 然后假设 xi 的 main 函数的参数为 \type{argc} 与 \type{argv}，以下代码构造了全部选项变量：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 基于 main 函数的参数 argc 与 argc 构造 xi 选项 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-120]{120}\inoutermargin{\darkred{120}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 基于 main 函数的参数 argc 与 argc 构造 xi 选项 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-124]{124}\inoutermargin{\darkred{124}}/ETEX
 WKArg xi_args[] = {
         WK_ARG_TOGGLE("tangle", "t"),
         WK_ARG_TEXT("entrance", "e"),
         WK_ARG_TOGGLE("line", "l"),
-        WK_ARG_TEXT("beginning", "B"),
-        WK_ARG_TEXT("end", "E"),
         WK_ARG_TOGGLE("weave", "w"),
         WK_ARG_TOGGLE("yaml", "y"),
         WK_ARG_TEXT("config", "c"),
@@ -3289,18 +3490,14 @@ bool tangle_opt = xi_args[0].value.toggle;
 const char *entrance_opt = xi_args[1].value.text;
 if (strcmp(entrance_opt, "") == 0) entrance_opt = NULL;
 bool line_opt = xi_args[2].value.toggle;
-const char *beginning_opt = xi_args[3].value.text;
-if (strcmp(beginning_opt, "") == 0) beginning_opt = NULL;
-const char *end_opt = xi_args[4].value.text;
-if (strcmp(end_opt, "") == 0) end_opt = NULL;
-bool weave_opt = xi_args[5].value.toggle;
-bool yaml_opt = xi_args[6].value.toggle;
-const char *xi_config_path = xi_args[7].value.text;
+bool weave_opt = xi_args[3].value.toggle;
+bool yaml_opt = xi_args[4].value.toggle;
+const char *xi_config_path = xi_args[5].value.text;
 if (strcmp(xi_config_path, "") == 0) xi_config_path = NULL;
-const char *output_opt = xi_args[8].value.text;
+const char *output_opt = xi_args[6].value.text;
 if (strcmp(output_opt, "") == 0) output_opt = NULL;
-bool help_opt = xi_args[9].value.toggle;
-const char *xi_file_path = xi_args[10].value.text;
+bool help_opt = xi_args[7].value.toggle;
+const char *xi_file_path = xi_args[8].value.text;
 if (strcmp(xi_file_path, "") == 0) xi_file_path = NULL;
 /* 选项合法性检测 */
 if (tangle_opt && weave_opt) {
@@ -3321,35 +3518,31 @@ if (tangle_opt && weave_opt) {
                 }
         }
 }
-/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-129]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-131]>/ETEX
 \stopC
 
 在 \type{--help} 模式下，仅输出 xi 的帮助信息：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 处理 --help 模式 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-121]{121}\inoutermargin{\darkred{121}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 处理 --help 模式 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-125]{125}\inoutermargin{\darkred{125}}/ETEX
 fprintf(stdout, "COMMAND: xi [OPTION]... FILE\n\n");
 fprintf(stdout, "%-16s  %s\n", "--tangle, -t",   "extract code snippets.");
 fprintf(stdout, "%-16s  %s\n", "--entrance, -e", "specify the name of the code fragment to extract.");
 fprintf(stdout, "%-16s  %s\n", "--line, -l",     "enable line numbers corresponding to the extracted");
 fprintf(stdout, "%-16s  %s\n", "",                "code fragment in the literate program.");
-fprintf(stdout, "%-16s  %s\n", "--beginning, -B",     "set the beginning region of the code fragment");
-fprintf(stdout, "%-16s  %s\n", "",                "extraction range.");
-fprintf(stdout, "%-16s  %s\n", "--end, -E",           "set the ending region of the code fragment");
-fprintf(stdout, "%-16s  %s\n", "",                "extraction range.");
 fprintf(stdout, "%-16s  %s\n", "--weave, -w",     "build the typeset documentation of the literate");
 fprintf(stdout, "%-16s  %s\n", "",                "program.");
 fprintf(stdout, "%-16s  %s\n", "--yaml, -y",      "enable yaml output.");
 fprintf(stdout, "%-16s  %s\n", "--config, -c",   "specify the path to the xi configuration file.");
 fprintf(stdout, "%-16s  %s\n", "--output, -o",   "set the output file name or path for xi.");
 fprintf(stdout, "%-16s  %s\n", "--help, -h",     "display this help and exit.");
-/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-129]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-131]>/ETEX
 \stopC
 
 在 \type{--tangle} 模式下，\type{--entrance} 和 \type{--output} 的值可能是多个，以西文逗号间隔，需将其解析为两个元素个数相同的数组：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 解析选项 --entrance 和 --output 的值 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-122]{122}\inoutermargin{\darkred{122}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 解析选项 --entrance 和 --output 的值 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-126]{126}\inoutermargin{\darkred{126}}/ETEX
 const char *opt_sep = ",";
 WKArray *entrances = str_split(entrance_opt, opt_sep);
 WKArray *outputs = str_split(output_opt, opt_sep);
@@ -3364,91 +3557,38 @@ if (entrances->n != outputs->n) {
         fprintf(stderr, "Illegal output!\n");
         exit(EXIT_FAILURE);
 }
-/BTEX=>\color[darkyellow]{ 处理 --tangle 模式 }<\in[xi-127]>/ETEX
-\stopC
-
-\noindent 上述代码中用于分割字符串的函数 \type{str_split}，其定义如下
-
-\startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 辅助函数 str_split，用于分割给定的字符串 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-123]{123}\inoutermargin{\darkred{123}}/ETEX 
-WKArray *str_split(const char *str, const char *sep) {
-        /* 主动在 str 的内容尾部追加 sep，从而将分割过程限制在一个循环里 */
-        WKStr *str_1 = wk_str(str);
-        wk_str_suffix(str_1, sep);
-        /* 根据 sep 分割 */
-        WKArray *a = wk_array(WKStr *);
-        const char *p = str_1->body;
-        const char *q = p;
-        size_t n = strlen(sep);
-        while (1) {
-                q = strstr(q, sep);
-                if (q) {
-                        WKStr *s = wk_str(NULL);
-                        for (const char *r = p; r != q; r++) {
-                                wk_str_suffix_char(s, *r);
-                        }
-                        if (s->n > 0) {
-                                wk_str_trim(s);
-                                wk_array_add(a, s, WKStr *);
-                        } else wk_str_free(s);
-                        q += n;
-                        p = q;
-                } else break;
-        }
-        wk_str_free(str_1);
-        return a;
-}
-/BTEX=>\color[darkyellow]{ xi 的数据结构与辅助函数 }<\in[xi-124]>/ETEX
-\stopC
-
-
-将 \type{str_split} 汇入 xi 的辅助函数集：
-
-\startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi 的数据结构与辅助函数 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-124]{124}\inoutermargin{\darkred{124}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
-/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 辅助函数 str_split，用于分割给定的字符串 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-123]>/ETEX
-/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-129]>/ETEX
+/BTEX=>\color[darkyellow]{ 处理 --tangle 模式 }<\in[xi-129]>/ETEX
 \stopC
 
 以下代码解析配置文件，构造符号表，读入文学程序文件并完成词法和语法分析：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi 核心过程 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-125]{125}\inoutermargin{\darkred{125}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi 核心过程 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-127]{127}\inoutermargin{\darkred{127}}/ETEX
 /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 符号表初始化 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-4]>/ETEX
-/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 配置文件解析 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-6]>/ETEX/BTEX\ <\in[xi-93]>/ETEX
+/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 配置文件解析 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-6]>/ETEX/BTEX\ <\in[xi-97]>/ETEX
 /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 打开文学程序文件 -> xi_file }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-9]>/ETEX
 WKList *xi_tokens = xi_lexer(xi_file);
 WKTree *xi_tree = xi_parser(xi_tokens);
-/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 构造冗白字符集 xi_skipped_chars_in_snippet_name }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-69]>/ETEX
-/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 为关系表注册 XITie 对象释放函数 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-79]>/ETEX
+/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 构造冗白字符集 xi_skipped_chars_in_snippet_name }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-72]>/ETEX
+/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 为关系表注册 XITie 对象释放函数 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-82]>/ETEX
 WKTable *relations = xi_create_relations(xi_tree->root);
-/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-129]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-131]>/ETEX
 \stopC
 
 上述过程分配的资源，需在 xi 进程退出前释放：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi 进程资源回收 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-126]{126}\inoutermargin{\darkred{126}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi 进程资源回收 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-128]{128}\inoutermargin{\darkred{128}}/ETEX/BTEX\ \color[darkgreen]{\bf $+$}\ /ETEX
 wk_table_free(relations);
 delete_syntax_tree(xi_tree);
-/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-129]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-131]>/ETEX
 \stopC
 
-若 \type{--tangle} 模式开启，则根据 \type{--beginning} 与 \type{--end} 的值确定代码片段抽取范围，然后调用 \type{xi_tangle} 抽取 \type{entrances} 中给定的代码片段，并输出到 \type{outputs} 中相应下标对应的输出端。
+若 \type{--tangle} 模式开启，则调用 \type{xi_tangle} 抽取 \type{entrances} 中给定的代码片段，并输出到 \type{outputs} 中相应下标对应的输出端。
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 处理 --tangle 模式 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-127]{127}\inoutermargin{\darkred{127}}/ETEX
-/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 解析选项 --entrance 和 --output 的值 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-122]>/ETEX
-size_t u = 0;
-size_t v = SIZE_MAX;
-if (beginning_opt && end_opt) {
-        WKPair *area = snippet_area(xi_tree, beginning_opt, end_opt);
-        u = wk_box_get(area->x, size_t);
-        v = wk_box_get(area->y, size_t);
-        wk_box_free(area->x);
-        wk_box_free(area->y);
-        wk_pair_free(area);
-}
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 处理 --tangle 模式 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-129]{129}\inoutermargin{\darkred{129}}/ETEX
+/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 解析选项 --entrance 和 --output 的值 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-126]>/ETEX
 WKList *indents = wk_list(WKStr *);
 for (size_t i = 0; i < entrances->n; i++) {
         WKStr *entrance = wk_array_get(entrances, i, WKStr *);
@@ -3458,8 +3598,8 @@ for (size_t i = 0; i < entrances->n; i++) {
                 fprintf(stderr, "Failed to open %s!\n", output_path->body);
                 exit(EXIT_FAILURE);
         }
-        xi_tangle(xi_file_path, relations,
-                  entrance, u, v, indents, line_opt, output);
+        xi_tangle(xi_file_path, xi_tree, relations,
+                  entrance, 0, SIZE_MAX, indents, line_opt, output);
         fclose(output);
 }
 for (WKLink *it = indents->head; it; it = it->next) {
@@ -3473,42 +3613,42 @@ for (size_t i = 0; i < entrances->n; i++) {
 }
 wk_array_free(entrances);
 wk_array_free(outputs);
-/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-129]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-131]>/ETEX
 \stopC
 
 在 \type{--weave} 模式下，\type{output_opt} 表示单个文件的名字或路径，通过它构造文学程序的文档格式输出，具体过程如下：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 处理 --weave 模式 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-128]{128}\inoutermargin{\darkred{128}}/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ 处理 --weave 模式 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-130]{130}\inoutermargin{\darkred{130}}/ETEX
 FILE *xi_output = fopen(output_opt, "w");
 spread_language_mark(xi_tree, relations);
 if (yaml_opt) {
         xi_yaml_output(xi_tree, relations, xi_fmt, xi_output);
 } else xi_weave(xi_tree, relations, xi_output);
 fclose(xi_output);
-/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-129]>/ETEX
+/BTEX=>\color[darkyellow]{ xi 程序 }<\in[xi-131]>/ETEX
 \stopC
 
 将上述代码片段组装为 xi 程序：
 
 \startC
-/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi 程序 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-129]{129}\inoutermargin{\darkred{129}}/ETEX
-/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 外境 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-5]>/ETEX/BTEX\ <\in[xi-46]>/ETEX/BTEX\ <\in[xi-90]>/ETEX/BTEX\ <\in[xi-119]>/ETEX
-/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 全局变量 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-14]>/ETEX/BTEX\ <\in[xi-68]>/ETEX
-/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ xi 的数据结构与辅助函数 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-41]>/ETEX/BTEX\ <\in[xi-62]>/ETEX/BTEX\ <\in[xi-81]>/ETEX/BTEX\ <\in[xi-91]>/ETEX/BTEX\ <\in[xi-118]>/ETEX/BTEX\ <\in[xi-124]>/ETEX
+/BTEX\color[darkred]{@}/ETEX/BTEX\color[darkred]{ xi 程序 }/ETEX/BTEX\color[darkred]{\#}/ETEX/BTEX\reference[xi-131]{131}\inoutermargin{\darkred{131}}/ETEX
+/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 外境 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-5]>/ETEX/BTEX\ <\in[xi-49]>/ETEX/BTEX\ <\in[xi-94]>/ETEX/BTEX\ <\in[xi-123]>/ETEX
+/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 全局变量 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-14]>/ETEX/BTEX\ <\in[xi-71]>/ETEX
+/BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ xi 的数据结构与辅助函数 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-44]>/ETEX/BTEX\ <\in[xi-65]>/ETEX/BTEX\ <\in[xi-84]>/ETEX/BTEX\ <\in[xi-95]>/ETEX/BTEX\ <\in[xi-122]>/ETEX
 int main(int argc, char **argv) {
-        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 基于 main 函数的参数 argc 与 argc 构造 xi 选项 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-120]>/ETEX
+        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 基于 main 函数的参数 argc 与 argc 构造 xi 选项 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-124]>/ETEX
         if (help_opt) {
-                /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 处理 --help 模式 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-121]>/ETEX
+                /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 处理 --help 模式 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-125]>/ETEX
         } else {
-                /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ xi 核心过程 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-125]>/ETEX
+                /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ xi 核心过程 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-127]>/ETEX
                 if (tangle_opt) {
-                        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 处理 --tangle 模式 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-127]>/ETEX
+                        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 处理 --tangle 模式 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-129]>/ETEX
                 }
                 if (weave_opt) {
-                        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 处理 --weave 模式 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-128]>/ETEX
+                        /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ 处理 --weave 模式 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-130]>/ETEX
                 }
-                /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ xi 进程资源回收 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-8]>/ETEX/BTEX\ <\in[xi-10]>/ETEX/BTEX\ <\in[xi-16]>/ETEX/BTEX\ <\in[xi-70]>/ETEX/BTEX\ <\in[xi-94]>/ETEX/BTEX\ <\in[xi-126]>/ETEX
+                /BTEX\color[darkcyan]{\#}/ETEX/BTEX\color[darkcyan]{ xi 进程资源回收 }/ETEX/BTEX\color[darkcyan]{@}/ETEX/BTEX\ <\in[xi-8]>/ETEX/BTEX\ <\in[xi-10]>/ETEX/BTEX\ <\in[xi-16]>/ETEX/BTEX\ <\in[xi-73]>/ETEX/BTEX\ <\in[xi-98]>/ETEX/BTEX\ <\in[xi-128]>/ETEX
         }
         return 0;
 }
