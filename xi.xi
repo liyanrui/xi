@@ -2126,6 +2126,7 @@ static void xi_tangle(const char *xi_file_path,
                       WKStr *entrance,
                       size_t begin, /* 区间开始 id */
                       size_t end,   /* 区间终止 id */
+                      size_t here,  /* 当前最大的 here 值 */
                       WKList *indents, /* 用于记录所引用的片段的缩进层次 */
                       bool show_line_number, /* 用于控制输出的内容是否包含行号 */
                       FILE *output) {
@@ -2140,6 +2141,7 @@ static void xi_tangle(const char *xi_file_path,
                 WKBranch *x_bra = wk_array_get(tie->time_order, i, WKBranch *);
                 XISyntax *x = wk_branch_get(x_bra, XISyntax *);
                 if (x->id < begin || x->id > end) continue;
+                if (here < x->id) here = x->id;
                 WKBranch *x_body_bra = wk_array_get(x_bra->lower, x_bra->lower->n - 1, WKBranch *);
 		for (size_t j = 0; j < x_body_bra->lower->n; j++) {
 			WKBranch *a_bra = wk_array_get(x_body_bra->lower, j, WKBranch *);
@@ -2251,13 +2253,13 @@ if (j > 0) {
         }
         /* 获得切片下标 */
         size_t u = 0, v = SIZE_MAX;
-        WKPair *slice = snippet_slice(syntax_tree, x, x_body_bra, &j);
+        WKPair *slice = snippet_slice(syntax_tree, here, x_body_bra, &j);
         u = wk_box_get(slice->x, size_t);
         v = wk_box_get(slice->y, size_t);
         wk_box_free(slice->x); wk_box_free(slice->y); wk_pair_free(slice);
         /* 抽取代码 */
         xi_tangle(xi_file_path, syntax_tree, relations,
-                  a_tok->content, u, v, indents, show_line_number, output);
+                  a_tok->content, u, v, here, indents, show_line_number, output);
         /* 删除当前层次的缩进 */
 	WKStr *current_indent = wk_link_get(indents->head, WKStr *);
         wk_str_free(current_indent);
@@ -2268,7 +2270,7 @@ if (j > 0) {
 注意，\type{xi_tangle} 所抽取的代码片段范围面向有名片段的 \type{id} 值。在使用 xi 程序从文学程序抽取代码时，用户更希望在片段引用后设定片段切片。片段切片的起止范围是基于片段标签引用设定的，需要将其转换为 \type{id} 范围：
 
 @ xi_tangle # ^+
-static WKPair *snippet_slice(WKTree *syntax_tree, XISyntax *x, WKBranch *x_body, size_t *i) {
+static WKPair *snippet_slice(WKTree *syntax_tree, size_t here, WKBranch *x_body, size_t *i) {
         size_t u = 0, v = SIZE_MAX;
         WKBranch *snippet_ref_bra = wk_array_get(x_body->lower, *i, WKBranch *);
         XISyntax *snippet_ref = wk_branch_get(snippet_ref_bra, XISyntax *);
@@ -2278,7 +2280,7 @@ static WKPair *snippet_slice(WKTree *syntax_tree, XISyntax *x, WKBranch *x_body,
         if (start->type == XI_SNIPPET_SLICE_START) {
                 XIToken *start_tok = wk_link_get(start->tokens->head, XIToken *);
                 if (strcmp(start_tok->content->body, "0") != 0) {
-                        if (strcmp(start_tok->content->body, "here") == 0) u = x->id;
+                        if (strcmp(start_tok->content->body, "here") == 0) u = here;
                         else {
                                 ssize_t id = get_snippet_id_by_tag(syntax_tree,
                                                                    snippet_ref_tok->content,
@@ -2289,7 +2291,7 @@ static WKPair *snippet_slice(WKTree *syntax_tree, XISyntax *x, WKBranch *x_body,
                 WKBranch *stop_bra = wk_array_get(x_body->lower, *i + 2, WKBranch *);
                 XISyntax *stop = wk_branch_get(stop_bra, XISyntax *);
                 XIToken *stop_tok = wk_link_get(stop->tokens->head, XIToken *);
-                if (strcmp(stop_tok->content->body, "here") == 0) v = x->id;
+                if (strcmp(stop_tok->content->body, "here") == 0) v = here;
                 else {
                         ssize_t id = get_snippet_id_by_tag(syntax_tree,
                                                            snippet_ref_tok->content,
@@ -2848,7 +2850,7 @@ do {
                 WKStr *a = wk_str(xi_fmt->snippet_tag->body);
                 wk_str_replace(a, "${id}", x_id->body);
                 wk_str_replace(a, "${name}", tag_token->content->body);
-                fprintf(output, "\n%s", a->body);
+                fprintf(output, "%s", a->body);
                 wk_str_free(a);
         } else {
                 fprintf(output, "\n%s%s%s",
@@ -2920,7 +2922,7 @@ if (xi_fmt->snippet_reference->n > 0) {
         }
         /* 获得切片下标 */
         size_t u = 0, v = SIZE_MAX;
-        WKPair *slice = snippet_slice(syntax_tree, x_syntax, y, &j);
+        WKPair *slice = snippet_slice(syntax_tree, x_syntax->id, y, &j);
         u = wk_box_get(slice->x, size_t);
         v = wk_box_get(slice->y, size_t);
         wk_box_free(slice->x); wk_box_free(slice->y); wk_pair_free(slice);
@@ -3146,7 +3148,7 @@ for (size_t j = 0; j < y->lower->n; j++) {
                                         "      ids:\n");
                         /* 获得切片下标 */
                         size_t u = 0, v = SIZE_MAX;
-                        WKPair *slice = snippet_slice(syntax_tree, x_syntax, y, &j);
+                        WKPair *slice = snippet_slice(syntax_tree, x_syntax->id, y, &j);
                         u = wk_box_get(slice->x, size_t);
                         v = wk_box_get(slice->y, size_t);
                         wk_box_free(slice->x); wk_box_free(slice->y); wk_pair_free(slice);
@@ -3342,7 +3344,7 @@ for (size_t i = 0; i < entrances->n; i++) {
                 exit(EXIT_FAILURE);
         }
         xi_tangle(xi_file_path, xi_tree, relations,
-                  entrance, 0, SIZE_MAX, indents, line_opt, output);
+                  entrance, 0, SIZE_MAX, 0, indents, line_opt, output);
         fclose(output);
 }
 for (WKLink *it = indents->head; it; it = it->next) {
