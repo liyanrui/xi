@@ -11,15 +11,15 @@
 
 \preface{前言}
 
-容易让人理解的程序应当以撰写一篇文章甚至一本书的方式去编写。一个程序可以视为是一栋建筑，通过文字去描述它，能够给人快速领会其本质的渠道或机会，而不至于迅速陷入程序源码的具体细节里，管中窥豹，盲人摸象。程序的源码可以打碎，如同一张又一张图纸，精确描画这栋建筑，分散在文字构成的诸多情节之中，后者则呈现这些图纸背后的设计理念。这种编程方式便是文学编程，由 Donald Knuth 于 20 世纪 80 年代提出。
+一个程序，其源码可以拆解为一组片段，这些片段如同一张又一张设计图，跟随作者的思路，分散在文字构成的情节之中。这种编程方式便是文学编程，由 Donald Knuth 于 20 世纪 80 年代提出。
 
-文学程序本身可以使用某种排版语言或标记语言编写，然后转化为可供阅读或印刷的程序文档。若需要程序在计算机里运行，可从文档里以符合机器逻辑的形式完整提取程序代码，交由编译器生成具体程序。因此，文学程序通常是某种排版语言和编程语言的混合体。Knuth 以他发明的 \TEX\ 语言编写文档，以 Pascal 语言编写程序源码片段，且 \TEX\ 排版系统本身便是由这种方式实现的。Knuth 将生成可以排版印刷的程序文档的过程称为编织（Weave），将提取程序源码的过程称为抽取（Tangle），这两个过程所用的程序分别是 weave 和 tangle，二者合称 WEB，而它们本身也是以文学编程的方式实现的，亦即自举。
+文学程序通常是某种排版语言和编程语言的混合体。Knuth 以他发明的 \TEX\ 语言编写文档，以 Pascal 语言编写程序源码片段，且 \TEX\ 排版系统本身便是由这种方式实现的。Knuth 将生成可以排版印刷的程序文档的过程称为编织（Weave），将提取程序源码的过程称为抽取（Tangle），这两个过程所用的程序分别是 weave 和 tangle，二者合称 WEB，而它们本身也是以文学编程的方式实现的。
 
-WEB 也是 Knuth 开发 \TEX\ 排版系统的专用工具，它并非现代语义中的互联网的意思。Knuth 用这个词作为他的文学编程工具的名字，是因为他认为，一篇文章或一本书是以网状结构描述事物。我的理解是，例如小说，各种人物的关系构成便是一个网络。不过，WEB 只支持基于 \TEX\ 排版语言和 Pascal 语言的文学编程。后来，Silvio Levy 主导设计了 CWEB，将文学编程的范式引入 C 语言世界。为了扩大排版和编程语言的支持范围，Norman Ramsey 设计并实现了新的文学编程工具 noweb。
+WEB 也是 Knuth 开发 \TEX\ 排版系统的专用工具。Knuth 用这个词作为他的文学编程工具的名字，是因为他认为，一篇文章或一本书是以网状结构描述事物。例如小说，各种人物的关系构成便是一个网络。WEB 只支持基于 \TEX\ 排版语言和 Pascal 语言的文学编程。后来，Silvio Levy 主导设计了 CWEB，将文学编程的范式引入 C 语言世界。为了扩大排版和编程语言的支持范围，Norman Ramsey 设计并实现了新的文学编程工具 noweb。
 
-我认为，现在依然还活着的这些文学编程工具皆已颇为陈旧。WEB 和 CWEB 在维护老的 \TEX\ 系统方面依然能发挥作用。noweb 默认能够支持 \TEX，\LATEX 和 HTML 等排版语言，但若要支持其他排版语言，需要用户自行编写相应的后端程序添加到 noweb 的工作管线，该过程对于一般用户较为困难。
+现在依然还活着的这些文学编程工具皆已颇为陈旧。WEB 和 CWEB 主要用于维护旧的 \TEX\ 系统。noweb 默认能够支持 \TEX，\LATEX 和 HTML 等排版语言，但若要支持其他排版语言，需要用户自行编写相应的后端程序添加到 noweb 的工作管线，该过程对于一般用户较为困难。
 
-2017 年，我想让事情变得简单一些，不自量力，实现了一个新的文学编程工具 orez。之后在 2024 年，该工具经过一次全面的重写，但功能几乎未变，变化主要发生在文档方面。事实上，文学程序的修改空间是更大的，即使代码保持不变，文档的修改空间也近乎是无限的，正如物理学家薛定谔所言，我们的任务不是去发现一些别人还没有发现的东西，而是针对所有人都看见的东西做一些从未有过的思考。
+2017 年，我写了一个简单的文学编程工具 orez。该工具在 2024 年经过一次全面的重写，除了支持用户自定义文学编程标记之外，变化主要发生在文档方面。事实上，文学程序的修改空间是更大的，即使代码保持不变，文档的修改空间也近乎是无限的。正如物理学家薛定谔所言，我们的任务不是去发现一些别人还没有发现的东西，而是针对所有人都看见的东西做一些从未有过的思考。
 
 \useURL[libwk][https://github.com/liyanrui/wk]
 我的需求，orez 完全能满足，但一直让我介怀的是，它依赖了 GLib 和 LibYAML 这两个大库的少量功能。今年，我穷得只剩下了时间，且不知何去何从，为了让自己不至于过于堕落，便先写了一个很小的 C 库，名曰 WK 库\footnote{\from[libwk]}，使之能完全覆盖 orez 的需求，用以取代 GLib 和 LibYAML。基于 WK 库，我重写了 orez 的文档和源码，并将其重新命名为 xi，在汉语里可对应「兮」，表示该工具简单到只是清淡的语气，它几乎不依赖任何东西。
@@ -28,7 +28,7 @@ WEB 也是 Knuth 开发 \TEX\ 排版系统的专用工具，它并非现代语�
 
 \subsection{基本符号}
 
-文学程序通常是由文档片段和源码片段组合而成，不妨将二者的关系想象为 DNA 的双链结构，彼此相连，相互缠绕。文档片段没有名字，后文将其称为无名片段。源码片段有名字且能可通过名字引用其内容，后文将其称为有名片段。Xi 默认使用符号 \type{@} 标记两个相邻片段的界限，例如
+文学程序通常是由文档片段和源码片段组合而成，不妨将二者的关系想象为 DNA 的双链结构，彼此相连，相互缠绕。文档片段没有名字，后文将其称为无名片段。源码片段有名字且能可通过名字引用其内容，后文将其称为有名片段。xi 默认使用符号 \type{@} 标记两个相邻片段的界限，例如
 
 \starttyping
 计算 x 与 y 的点积：
@@ -37,17 +37,17 @@ sum = 0;
 for (i = 0; i < n; i++) sum += x[i] * y[i];
 \stoptyping
 
-符号 \type{@} 仅能帮助 xi 识别出存在两部分文本，但不能识别其类型——无名片段还是有名片段。为此，Xi 默认用符号 \type{#} 标记片段名字的终止，配合 \type{@} 符号，便可区分片段类型，例如下面是一个有名片段
+符号 \type{@} 仅能帮助 xi 程序识别两个片段，却不能识别二者是无名片段还是有名片段。为此，xi 默认以符号 \type{#} 标记片段名字的终止，从而区分片段类型，例如
 
-\starttyping
+\starttyping[escape=yes]
 ESC_AT 计算 x 与 y 的点积 ESC_SHARP
 sum = 0;
 for (i = 0; i < n; i++) sum += x[i] * y[i];
 \stoptyping
 
-\noindent 其名字为「计算 x 与 y 的点积」。
+\noindent 是有名片段，其名为「计算 x 与 y 的点积」。
 
-片段的名字可能会过长，需要用续行符予以分行。Xi 默认的续行符为反斜线 \type{\}，例如
+片段的名字可能会过长，需要用续行符予以分行。xi 默认的续行符为反斜线 \type{\}，例如
 
 \starttyping
 ESC_AT 计算 x 与 y 的点积，\
@@ -56,21 +56,21 @@ sum = 0;
 for (i = 0; i < n; i++) sum += x[i] * y[i];
 \stoptyping
 
-有名片段可被引用。若在一个有名片段中引用另一个有名片段，在 xi 默认的符号形式中，只需颠倒后者名字前后的「\type{@}」和「\type{#}」的位置便可构成对该片段的引用，例如
+有名片段可被引用。若在一个有名片段中引用另一个有名片段，只需颠倒后者名字前后的「\type{@}」和「\type{#}」的位置便可构成对该片段的引用，例如
 
 \starttyping
 ESC_AT 点积 ESC_SHARP
 int dot_product(double x[], double y[], int n) {
         int i;
         double sum;
-        ESC_SHARP 计算 x 与 y 的点积 ESC_AT; /* 有名片段引用 */
+        ESC_SHARP 计算 x 与 y 的点积 ESC_AT;
         return sum;
 }
 \stoptyping
 
 \noindent 形如「\type{# ... @}」的文本结构称为有名片段的引用，此时 \type{@} 构成片段引用终结符，其后的同一行文本会被 xi 忽略，上例中位于引用终结符之后的分号以及注释文本「\type{/* 有名片段引用 */}」皆会被忽略。
 
-在实际使用 xi 编写文学程序时，可以用 \type{@} 作为有名片段的终结符使用，此举并不违背上述规则。例如
+在实际使用 xi 编写文学程序时，可以用 \type{@} 作为有名片段的终结符使用，例如
 
 \starttyping
 ESC_AT 点积 ESC_SHARP
@@ -83,9 +83,11 @@ int dot_product(double x[], double y[], int n) {
 ESC_AT
 \stoptyping
 
+\noindent 此举并不违背片段界限符规则。
+
 \subsection{有名片段累加符}
 
-有名片段可以同名。同名片段意味着一段复杂的程序源码被打碎，按照易于阅读和理解的原则散布于各处。Xi 抽取程序源码时，会依序合并这些同名片段。例如，假设此处存在名为 foobar 的有名片段：
+有名片段可以同名。同名片段意味着一段复杂的程序源码被打碎，按照易于阅读和理解的原则散布于各处。xi 抽取程序源码时，会依序合并这些同名片段。例如，假设此处存在名为 foobar 的有名片段：
 
 \starttyping
 ESC_AT foobar ESC_SHARP
@@ -160,23 +162,6 @@ void foobar(void) {
 
 \noindent 上述示例中，第二个有名片段首部之后的 \type{<tag>} 便是该有名片段的标签。第三个有名片段首部之后的运算符 \type{^+} 之前的 \type{<tag>}，表示当前的有名片段需要合并至带有该标签的同名片段之前。注意，有名片段的标签需要具备唯一性，亦即 xi 不允许两个同名片段使用相同标签。
 
-\subsection{同名片段切片}
-
-在一个有名片段的内容中引用另一个有名片段时，后者可能是多个同名片段构成的集合，可以在片段引用之后设定该集合的切片，即只引用该集合内的一个子集。切片范围基于片段标签构造，例如
-
-\starttyping
-ESC_AT 点积 ESC_SHARP
-int dot_product(double x[], double y[], int n) {
-        int i;
-        double sum;
-        ESC_SHARP 计算 x 与 y 的点积 ESC_AT [<a>, <b>];
-        return sum;
-}
-ESC_AT
-\stoptyping
-
-\noindent \type{<a>} 和 \type{<b>} 分别为两个同名片段的标签，二者及其之间的其他同名片段构成切片。需要注意的是，有名片段引用之后的同一行内容会被忽略，故而同名片段切片也不会显示在文学程序编织而成的文档里。为了简化同名片段切片的构造，以 0 表示同名片段集合中的首个片段，\type{here} 表示同名片段集合中位于片段引用者之前最后一个片段。
-
 \subsection[lang-mark]{编程语言}
 
 尽管 xi 所支持的文学编程独立于任何编程语言，但是在文档排版过程中为了实现有名片段的高亮渲染，需要知道有名片段所用的编程语言，可在有名片段的首部的特定位置放置一个标记表示该片段所用编程语言，例如
@@ -200,7 +185,7 @@ void foobar(void) {
 
 \subsection{记号}
 
-在第 \in[xi-mark] 节中，已经给出了 xi 默认的所有符号。除这些符号之外，还有其他文本，xi 将后者统一视为普通文本。词法分析的目的是将文本内容转化为一组记号构成的序列。无论是符号还是普通文本，其对应的记号皆用统一的数据结构予以表示：
+在第 \in[xi-mark] 节中，已给出 xi 程序所用的所有默认符号及其含义。除这些符号之外，xi 将文学程序里的其他内容视为普通文本。在词法分析过程中，无论是符号还是普通文本，其记号表示为
 
 @ 记号 # [C]
 typedef struct {
@@ -210,7 +195,7 @@ typedef struct {
 } XIToken;
 @
 
- \noindent 其中 \type{type} 字段表示记号类型，以下类型覆盖了 xi 所支持的文学编程的所有记号：
+\noindent 其中 \type{type} 字段表示记号类型，共有以下类型
 
 @ 记号 # ^+
 typedef enum {
@@ -224,15 +209,13 @@ typedef enum {
         XI_TAG_STOP_MARK, /* 有名片段标签终结符 */
         XI_SNIPPET_REFERENCE_START_MARK, /* 有名片段引用开始符 */
         XI_SNIPPET_REFERENCE_STOP_MARK, /* 有名片段引用终结符 */
-        XI_SNIPPET_SLICE_START_MARK, /* 有名片段切片起始位置（0, here 或片段标签） */
-        XI_SNIPPET_SLICE_STOP_MARK,  /* 有名片段切片终止位置（here 或片段标签） */
         XI_TEXT /* 普通文本 */
 } XITokenType;
 @
 
-\noindent 记号结构里的 \type{line_number} 和 \type{content} 字段分别记录了记号所在行号（从 1 开始，若记号跨多行，则记录其首行行号）和内容。
+\noindent \type{line_number} 和 \type{content} 字段分别用于记录记号起始行号和内容。
 
-第 \in[xi-mark] 节中涉及的符号，皆为 xi 默认符号。Xi 允许用户通过配置文件自定义符号，用以代替这些默认的符号。为了达成这一目标，需要为符号定义一个变量集：
+第 \in[xi-mark] 节中涉及的符号，皆为 xi 默认符号。xi 允许用户通过配置文件自定义符号，用以代替这些默认的符号。为了达成这一目标，需要为符号定义一个变量集：
 
 @ 记号 # +
 typedef struct {
@@ -247,10 +230,7 @@ typedef struct {
         WKStr *tag_stop_mark;
         WKStr *snippet_reference_start_mark;
         WKStr *snippet_reference_stop_mark;
-        WKStr *snippet_slice_start_mark;
-        WKStr *snippet_slice_stop_mark;
 } XISymbols;
-
 XISymbols *xi_symbols;
 @
 
@@ -269,29 +249,26 @@ xi_symbols = malloc(sizeof(XISymbols));
         .tag_start_mark = wk_str("<"),
         .tag_stop_mark = wk_str(">"),
         .snippet_reference_start_mark = wk_str("#"),
-        .snippet_reference_stop_mark = wk_str("@"),
-        .snippet_slice_start_mark = wk_str("["),
-        .snippet_slice_stop_mark = wk_str("]")
+        .snippet_reference_stop_mark = wk_str("@")
 };
 @
 
 \noindent 若用户未通过 xi 配置文件提供自定义符号，则词法分析过程会默认使用 \type{xi_symbols} 的初始值作为 xi 文学编程符号。
 
-Xi 的配置文件，其形式上是一组键值对，键名与 \type{XIConfig} 的成员变量名相同，例如
+xi 的配置文件，其形式上是一组键值对，键名与 \type{XIConfig} 的成员变量名相同，例如
 
 \starttyping
 snippet_reference_start_mark: 「
 snippet_reference_stop_mark: 」
 \stoptyping
 
-在解析 xi 的配置文件时，需要借助 WK 库的 WKCfg 模块。我将 xi 外部库的头文件包含代码统一放在名为「外景」的代码片段内：
+在解析 xi 的配置文件时，需要借助 WK 库的 WKCfg 模块。我将 xi 外部库的头文件包含代码统一放在名为「外景」的代码片段内，
 
 @ 外境 # [C]
-/* 该头文件已包含 wk-str.h, wk-array.h, wk-list.h, wk-table.h 等 */
 #include <wk-cfg.h>
 @
 
-WKCfg 模块依赖 WKStr（字符串模块）、WKArray（动态数组模块）、WKList（双向链表模块）以及 WKTable（散列表模块），后面这些模块也皆为 xi 所需，后者的头文件皆已被 wi-cfg.h 包含。
+\noindent WKCfg 模块依赖 WKStr（字符串模块）、WKArray（动态数组模块）、WKList（双向链表模块）以及 WKTable（散列表模块），后面这些模块也皆为 xi 所需，后者的头文件皆已被 wi-cfg.h 包含。
 
 假设配置文件路径变量为 \type{xi_config_path}，配置文件的载入及解析过程如下：
 
@@ -310,8 +287,6 @@ if (user_config) {
         XI_USER_CONFIG(user_config, xi_symbols, tag_stop_mark);
         XI_USER_CONFIG(user_config, xi_symbols, snippet_reference_start_mark);
         XI_USER_CONFIG(user_config, xi_symbols, snippet_reference_stop_mark);
-        XI_USER_CONFIG(user_config, xi_symbols, snippet_slice_start_mark);
-        XI_USER_CONFIG(user_config, xi_symbols, snippet_slice_stop_mark);
 }
 @
 
@@ -329,7 +304,7 @@ if (user_config) {
 
 \noindent 上述宏定义里，\type{#item} 表示给 \type{item} 的值添加双引号，使之成为 C 字符串常量。
 
-在 xi 进程退出前，配合文件解析结果 \type{user_config} 以及符号集 \type{xi_symbols} 占用的内存由以下代码回收：
+在 xi 进程退出前，配合文件解析结果 \type{user_config} 以及符号集 \type{xi_symbols} 占用的内存由以下代码释放：
 
 @ xi 进程资源回收 #
 if (user_config) wk_table_free(user_config);
@@ -344,16 +319,12 @@ wk_str_free(xi_symbols->tag_start_mark);
 wk_str_free(xi_symbols->tag_stop_mark);
 wk_str_free(xi_symbols->snippet_reference_start_mark);
 wk_str_free(xi_symbols->snippet_reference_stop_mark);
-wk_str_free(xi_symbols->snippet_slice_start_mark);
-wk_str_free(xi_symbols->snippet_slice_stop_mark);
 free(xi_symbols);
 @
 
-通过上述内容，你大致应该熟悉了文学编程的基本思路。每个代码片段，就像有一些接线的小型电路板块，文字内容则主要描述该板块的功能或一些设计上的细节。只要小心地将这些小型电路板块连接起来，便可得到完整的程序。不同代码片段之间的连接关系是建立在一些公共的变量上的，亦即这些变量像是电路板的接线。
-
 \subsection{输入}
 
-假设文学程序文件路径为 \type{xi_file_path}，打开该文件：
+假设文学程序文件路径为 \type{xi_file_path}，打开该文件，
 
 @ 打开文学程序文件 -> xi_file # [C]
 FILE *xi_file = xi_file_path ? fopen(xi_file_path, "r") : stdin;
@@ -369,7 +340,7 @@ if (!xi_file) {
 fclose(xi_file);
 @
 
-在读取文学程序文件的过程中，需要一个缓冲区临时存储读入的字符。辅助函数 \type{read_char} 可从文件中读取当前字符（一个字节），将其存入缓冲区。
+在读取文学程序文件的过程中，需要一个缓冲区临时存储读入的字符。辅助函数 \type{read_char} 可从文件中读取当前字符（一个字节），将其存入缓冲区，
 
 @ 词法分析阶段的辅助函数 # [C]
 static int read_char(FILE *xi_file, WKStr *cache) {
@@ -383,29 +354,26 @@ static int read_char(FILE *xi_file, WKStr *cache) {
 
 \subsection{分段}
 
-分段，是词法分析第一阶段，主要任务是将文学程序文件读入内存，基于无名片段和有名片段的界限符，将两种片段分割开来，从而形成初始的记号列表——由无名片段、有名片段以及界限符对应的记号构成。
+词法分析第一阶段的主要任务是将文学程序文件读入内存，基于无名片段和有名片段的界限符，将两种片段分割开来，从而形成初始的记号列表——由无名片段、有名片段以及界限符对应的记号构成。
 
-由于用户可以配置自己喜欢的片段界限符，导致 xi 无法假设界限符的宽度（占用的字节数），故而从文学程序文件中每读取一个字节，皆需需检测缓冲区的尾端是否符合「换行符 + 空白字符 + \type{XI_SNIPPET_DELIMITER}」模式，亦即无名片段与有名片段的分割符必须位于一行的开头，其前只允许出现空白字符（空格、全角空格或制表符）。该检测过程由辅助函数 \type{tail_is_snippet_delimiter} 实现，如下：
+由于用户可以配置自己喜欢的片段界限符，导致 xi 无法假设界限符的宽度（占用的字节数），故而从文学程序文件中每读取一个字节，皆需需检测缓冲区的尾端是否符合「换行符 + 空白字符 + \type{XI_SNIPPET_DELIMITER}」模式，亦即无名片段与有名片段的分割符必须位于一行的开头，其前只允许出现空白字符（空格、全角空格或制表符）。
 
 @ 词法分析阶段的辅助函数 # +
 static bool tail_is_snippet_delimiter(WKStr *cache) {
         WKStr *snippet_delimiter = xi_symbols->snippet_delimiter;
         if (snippet_delimiter->n > cache->n) return false;
-        /* 令 p 指向缓冲区末尾 snippet_delimiter->n 个字节之首 */
         const char *p = cache->body + cache->n - snippet_delimiter->n;
         if (strcmp(p, snippet_delimiter->body) != 0) return false;
         if (p == cache->body) return true;
-        /* 构造字符串区间 [a, b) */
+        /* 构造字符串区间 [a, b)，若该区间存在不可忽略的字符，结果为 false，否则为 true */
         const char *a = cache->body;
         const char *b = p;
-        /* 向左探测 */
         p = xi_skip(a, b, p, -1, xi_skipped_chars);
-        if (p == a) return true;
-        else return (*(p - 1) == '\n') ? true : false;
+        return (p == a || *(p - 1) == '\n') ? true : false;
 }
 @
 
-\noindent \type{xi_skip} 可以在字符串区间 \type{[a, b)} 中移动 \type{c}，令其根据方向 \type{dir} 跳过所有属于 \type{xi_skipped_chars} 的字符，并返回其终值。\type{dir} 小于 0 表示向 \type{a} 的方向移动，否则向 \type{b} 的方向移动，倘若无法移动，则返回 \type{c} 的原值。该函数实现如下：
+\noindent \type{xi_skip} 可以在字符串区间 \type{[a, b)} 中移动 \type{c}，令其根据方向 \type{dir} 跳过所有属于 \type{xi_skipped_chars} 的字符，并返回其终值。\type{dir} 小于 0 表示向 \type{a} 的方向移动，否则向 \type{b} 的方向移动，倘若无法移动，则返回 \type{c} 的原值。
 
 @ 词法分析阶段的辅助函数 # ^+
 static const char *xi_skip(const char *a, const char *b,
@@ -430,7 +398,7 @@ static const char *xi_skip(const char *a, const char *b,
 }
 @
 
-全局变量 \type{xi_skipped_chars} 存储了可用于 \type{xi_skip} 函数的空白字符集，其定义、初始化和回收过程如下：
+全局变量 \type{xi_skipped_chars} 存储了可用于 \type{xi_skip} 函数的空白字符集，其定义、初始化和回收过程为
 
 @ 全局变量 #
 WKArray *xi_skipped_chars; /* xi 空白字符集 */
@@ -451,12 +419,12 @@ for (size_t i = 0; i < xi_skipped_chars->n; i++) {
 wk_array_free(xi_skipped_chars);
 @
 
-若 \type{tail_is_snippet_delimiter} 返回 \type{true}，即缓冲区尾部是片段界限符，则将其移除：
+若 \type{tail_is_snippet_delimiter} 返回 \type{true}，表明缓冲区尾部是片段界限符，此时该符号完成了它的使命，将其从缓冲区中移除，
 
 @ 移除缓冲区尾部的片段界限符 #
-size_t length = xi_symbols->snippet_delimiter->n;
-size_t begin = cache->n - length;
-wk_str_del(cache, begin, length);
+size_t sni_del_length = xi_symbols->snippet_delimiter->n;
+size_t sni_del_begin = cache->n - sni_del_length;
+wk_str_del(cache, sni_del_begin, sni_del_length);
 @
 
 \noindent 删除缓冲区尾部的片段界限符后，剩余字符作为片段内容，记为类型 \type{XI_TEXT}，存于记号列表：
@@ -472,7 +440,7 @@ static void add_snippet(WKList *tokens, WKStr *cache) {
 }
 @
 
-\noindent 缓冲区内的文本（当前记号）在文件中的行号需基于记号列表 \type{tokens} 的尾节点对应的行号以及该节点存储的文本行数予以确定：
+\noindent 基于上一个记号的行号以及该记号内容的行数确定新记号的行号：
 
 @ 获取当前记号对应的行号 n #
 size_t n;
@@ -1077,94 +1045,10 @@ static void split_snippet(WKList *tokens, WKLink *x, WKPair *snippet_reference) 
         /* 更新行号 */
         t->line_number = line_number;
         /* 片段引用之后的内容 */
-        WKStr *e = wk_str(NULL); /* 片段引用之后的同行内容（不包含换行符） */
-        WKStr *f = wk_str(NULL); /* e 之后的内容 */
-        bool after_reference = true;
-        for (const char *p = ref_stop; *p != '\0'; p++) {
-                if (after_reference) {
-                         /* 收集与片段引用之后与片段引用终止符同一行的文本 */
-                        if (*p == '\n') {
-                                after_reference = false;
-                                wk_str_suffix_char(f, *p);
-                        } else wk_str_suffix_char(e, *p);
-                } else wk_str_suffix_char(f, *p);
-        }
-        if (e->n > 0) { /* 析取片段切片 */
-                add_snippet_slice_token(tokens, x, e);
-        }
-        wk_str_free(e);
+        WKStr *f = wk_str(NULL);
+        for (const char *p = ref_stop; *p != '\0'; p++) wk_str_suffix_char(f, *p);
         wk_str_free(t->content);
-        /* 剩余内容仍存于 t */
         t->content = f;
-}
-@
-
-@ 词法分析阶段的辅助函数 # <split_snippet> ^+
-/* 创建切片起止记号，添加到 x 之前 */
-static void add_snippet_slice_token(WKList *tokens, WKLink *x, WKStr *after_snippet_ref) {
-        XIToken *t = wk_link_get(x, XIToken *);
-        WKStr *slice_start_mark = xi_symbols->snippet_slice_start_mark;
-        WKStr *slice_stop_mark = xi_symbols->snippet_slice_stop_mark;
-        WKPair *block = find_block(after_snippet_ref, slice_start_mark, slice_stop_mark);
-        if (block) {
-                WKStr *slice_raw = get_block(after_snippet_ref, block);
-                WKArray *slice = str_split(slice_raw->body, ",");
-                if (slice->n !=2) {
-                        fprintf(stderr,
-                                "Illegal snippet slice in line %lu!\n",
-                                t->line_number);
-                        exit(EXIT_FAILURE);
-                }
-                for (size_t i = 0; i < slice->n; i++) {
-                        XIToken *new_t = malloc(sizeof(XIToken));
-                        WKStr *content = wk_array_get(slice, i, WKStr *);
-                        if (i == 0) new_t->type = XI_SNIPPET_SLICE_START_MARK;
-                        else new_t->type = XI_SNIPPET_SLICE_STOP_MARK;
-                        new_t->line_number = t->line_number;
-                        block = find_block(content,
-                                           xi_symbols->tag_start_mark,
-                                           xi_symbols->tag_stop_mark);
-                        if (block) {
-                                new_t->content = get_block(content, block);
-                                wk_str_free(content);
-                        } else new_t->content = content;
-                        WK_LIST_INSF(tokens, x, &new_t);
-                }
-                wk_array_free(slice);
-                wk_str_free(slice_raw);
-        }
-}
-@
-
-\noindent 上述代码中用于分割字符串的函数 \type{str_split}，其定义如下
-
-@ 词法分析阶段的辅助函数 # ^+
-WKArray *str_split(const char *str, const char *sep) {
-        /* 主动在 str 的内容尾部追加 sep，从而将分割过程限制在一个循环里 */
-        WKStr *str_1 = wk_str(str);
-        wk_str_suffix(str_1, sep);
-        /* 根据 sep 分割 */
-        WKArray *a = wk_array(WKStr *);
-        const char *p = str_1->body;
-        const char *q = p;
-        size_t n = strlen(sep);
-        while (1) {
-                q = strstr(q, sep);
-                if (q) {
-                        WKStr *s = wk_str(NULL);
-                        for (const char *r = p; r != q; r++) {
-                                wk_str_suffix_char(s, *r);
-                        }
-                        if (s->n > 0) {
-                                wk_str_trim(s);
-                                wk_array_add(a, s, WKStr *);
-                        } else wk_str_free(s);
-                        q += n;
-                        p = q;
-                } else break;
-        }
-        wk_str_free(str_1);
-        return a;
 }
 @
 
@@ -1276,12 +1160,6 @@ static void xi_print_tokens(WKList *tokens) {
                 case XI_SNIPPET_REFERENCE_STOP_MARK:
                         printf("snippet reference stop mark");
                         break;
-                case XI_SNIPPET_SLICE_START_MARK:
-                        printf("snippet slice start mark");
-                        break;
-                case XI_SNIPPET_SLICE_STOP_MARK:
-                        printf("snippet slice stop mark");
-                        break;
                 case XI_TEXT:
                         printf("text");
                         break;
@@ -1319,8 +1197,6 @@ typedef enum {
         XI_SNIPPET_TAG,
         XI_SNIPPET_CONTENT,
         XI_SNIPPET_REFERENCE,
-        XI_SNIPPET_SLICE_START,
-        XI_SNIPPET_SLICE_STOP,
         XI_SNIPPET_TEXT
 } XISyntaxType;
 @
@@ -1573,12 +1449,10 @@ for (size_t i = 0; i < branches->n; i++) {
 
 \subsection{有名片段的内容}
 
-有名片段的内容节点包含四种种语法节点类型：
+有名片段的内容节点仅包含两种语法节点类型：
 
 \startitemize
 \item \type{XI_SNIPPET_REFERENCE}
-\item \type{XI_SNIPPET_SLICE_START}
-\item \type{XI_SNIPPET_SLICE_STOP}
 \item \type{XI_SNIPPET_TEXT}
 \stopitemize
 
@@ -1603,24 +1477,6 @@ static void add_branches_for_snippet_content(WKTree *syntax_tree, WKBranch *x)
                         wk_tree_add(syntax_tree, x, reference, XISyntax *);
                         /* 让片段引用结束符作为当前节点 */
                         it = it->next;
-                } else if (token->type == XI_SNIPPET_SLICE_START_MARK) {
-                        /* 构造片段切片起点 */
-                        token = wk_link_get(it, XIToken *);
-                        XISyntax *slice_start = malloc(sizeof(XISyntax));
-                        slice_start->type = XI_SNIPPET_SLICE_START;
-                        slice_start->tokens = wk_list(XIToken *);
-                        slice_start->id = 0;
-                        wk_list_suffix(slice_start->tokens, token, XIToken *);
-                        wk_tree_add(syntax_tree, x, slice_start, XISyntax *);
-                        /* 构造片段切片终点 */
-                        it = it->next;
-                        token = wk_link_get(it, XIToken *);
-                        XISyntax *slice_stop = malloc(sizeof(XISyntax));
-                        slice_stop->type = XI_SNIPPET_SLICE_STOP;
-                        slice_stop->tokens = wk_list(XIToken *);
-                        slice_stop->id = 0;
-                        wk_list_suffix(slice_stop->tokens, token, XIToken *);
-                        wk_tree_add(syntax_tree, x, slice_stop, XISyntax *);
                 } else {
                         XISyntax *text = malloc(sizeof(XISyntax));
                         text->type = XI_SNIPPET_TEXT;
@@ -1763,12 +1619,6 @@ static void print_syntax_tree(WKBranch *root) {
                         break;
                 case XI_SNIPPET_REFERENCE:
                         printf("<snippet reference>\n");
-                        break;
-                case XI_SNIPPET_SLICE_START:
-                        printf("<snippet slice start>\n");
-                        break;
-                case XI_SNIPPET_SLICE_STOP:
-                        printf("<snippet slice stop>\n");
                         break;
                 case XI_SNIPPET_TEXT:
                         printf("<snippet text>\n");
@@ -2124,9 +1974,7 @@ static void xi_tangle(const char *xi_file_path,
                       WKTree *syntax_tree,
                       WKTable *relations,
                       WKStr *entrance,
-                      size_t begin, /* 区间开始 id */
-                      size_t end,   /* 区间终止 id */
-                      size_t here,  /* 当前最大的 here 值 */
+                      size_t here,  /* 递归路径上节点 id 值的最大值，初值为 0 */
                       WKList *indents, /* 用于记录所引用的片段的缩进层次 */
                       bool show_line_number, /* 用于控制输出的内容是否包含行号 */
                       FILE *output) {
@@ -2137,11 +1985,16 @@ static void xi_tangle(const char *xi_file_path,
 		exit(EXIT_FAILURE);
         }
 	XITie *tie = wk_box_get(tie_box, XITie *);
+        /* 获得入口片段的 id */
+        if (here == 0) {
+                WKBranch *last_bra = wk_array_get(tie->spatial_order, tie->spatial_order->n - 1, WKBranch *);
+                XISyntax *last = wk_branch_get(last_bra, XISyntax *);
+                here = last->id;
+        }
         for (size_t i = 0; i < tie->time_order->n; i++) {
                 WKBranch *x_bra = wk_array_get(tie->time_order, i, WKBranch *);
                 XISyntax *x = wk_branch_get(x_bra, XISyntax *);
-                if (x->id < begin || x->id > end) continue;
-                if (here < x->id) here = x->id;
+                if (i > 0 && x->id > here) continue; /* 同名片段，会被 here 截断 */
                 WKBranch *x_body_bra = wk_array_get(x_bra->lower, x_bra->lower->n - 1, WKBranch *);
 		for (size_t j = 0; j < x_body_bra->lower->n; j++) {
 			WKBranch *a_bra = wk_array_get(x_body_bra->lower, j, WKBranch *);
@@ -2222,18 +2075,16 @@ static WKStr *cascade_indents(WKList *indents) {
 
 @ xi_tangle # ^+
 static WKStr *last_blank_line(XISyntax *a) {
+        if (a->type != XI_SNIPPET_TEXT) return NULL;
         WKStr *blank_line = wk_str(NULL);
-        XIToken *t = wk_link_get(a->tokens->head, XIToken *);
-        if (t->content->n > 1) {
-                WKStr *u = t->content;
-                const char *head = u->body;
-                const char *tail = u->body + u->n;
-                const char *p = tail;
-                p = xi_skip(head, tail, p, -1, xi_skipped_chars);
-                if (p != head && *(p - 1) == '\n') {
-                        for (const char *q = p; *q != '\0'; q++) {
-                                wk_str_suffix_char(blank_line, *q);
-                        }
+        XIToken *a_tok = wk_link_get(a->tokens->head, XIToken *);
+        const char *head = a_tok->content->body;
+        const char *tail = head + a_tok->content->n;
+        const char *p = tail;
+        p = xi_skip(head, tail, p, -1, xi_skipped_chars);
+        if (p != head && *(p - 1) == '\n') {
+                for (const char *q = p; *q != '\0'; q++) {
+                        wk_str_suffix_char(blank_line, *q);
                 }
         }
         return blank_line;
@@ -2247,110 +2098,19 @@ if (j > 0) {
         /* 获得缩进 */
 	WKBranch *prev = wk_array_get(x_body_bra->lower, j - 1, WKBranch *);
         XISyntax *y = wk_branch_get(prev, XISyntax *);
-        if (y->type == XI_SNIPPET_TEXT) {
-                WKStr *blank_line = last_blank_line(y);
+        WKStr *blank_line = last_blank_line(y);
+        if (blank_line) {
                 wk_list_prefix(indents, blank_line, WKStr *);
         }
-        /* 获得切片下标 */
-        size_t u = 0, v = SIZE_MAX;
-        WKPair *slice = snippet_slice(syntax_tree, here, x_body_bra, &j);
-        u = wk_box_get(slice->x, size_t);
-        v = wk_box_get(slice->y, size_t);
-        wk_box_free(slice->x); wk_box_free(slice->y); wk_pair_free(slice);
         /* 抽取代码 */
         xi_tangle(xi_file_path, syntax_tree, relations,
-                  a_tok->content, u, v, here, indents, show_line_number, output);
+                  a_tok->content, here, indents, show_line_number, output);
         /* 删除当前层次的缩进 */
-	WKStr *current_indent = wk_link_get(indents->head, WKStr *);
-        wk_str_free(current_indent);
-	wk_list_del(indents, indents->head);
-}
-@
-
-注意，\type{xi_tangle} 所抽取的代码片段范围面向有名片段的 \type{id} 值。在使用 xi 程序从文学程序抽取代码时，用户更希望在片段引用后设定片段切片。片段切片的起止范围是基于片段标签引用设定的，需要将其转换为 \type{id} 范围：
-
-@ xi_tangle # ^+
-static WKPair *snippet_slice(WKTree *syntax_tree, size_t here, WKBranch *x_body, size_t *i) {
-        size_t u = 0, v = SIZE_MAX;
-        WKBranch *snippet_ref_bra = wk_array_get(x_body->lower, *i, WKBranch *);
-        XISyntax *snippet_ref = wk_branch_get(snippet_ref_bra, XISyntax *);
-        XIToken *snippet_ref_tok = wk_link_get(snippet_ref->tokens->head, XIToken *);
-        WKBranch *start_bra = wk_array_get(x_body->lower, *i + 1, WKBranch *);
-        XISyntax *start = wk_branch_get(start_bra, XISyntax *);
-        if (start->type == XI_SNIPPET_SLICE_START) {
-                XIToken *start_tok = wk_link_get(start->tokens->head, XIToken *);
-                if (strcmp(start_tok->content->body, "0") != 0) {
-                        if (strcmp(start_tok->content->body, "here") == 0) u = here;
-                        else {
-                                ssize_t id = get_snippet_id_by_tag(syntax_tree,
-                                                                   snippet_ref_tok->content,
-                                                                   start_tok->content);
-                                if (id > 0) u = id;
-                        }
-                }
-                WKBranch *stop_bra = wk_array_get(x_body->lower, *i + 2, WKBranch *);
-                XISyntax *stop = wk_branch_get(stop_bra, XISyntax *);
-                XIToken *stop_tok = wk_link_get(stop->tokens->head, XIToken *);
-                if (strcmp(stop_tok->content->body, "here") == 0) v = here;
-                else {
-                        ssize_t id = get_snippet_id_by_tag(syntax_tree,
-                                                           snippet_ref_tok->content,
-                                                           stop_tok->content);
-                        if (id > 0) v = id;
-                }
-                *i += 2;
+        if (blank_line) {
+                wk_str_free(blank_line);
+                wk_list_del(indents, indents->head);
         }
-        WKPair *slice = wk_pair(wk_box(u, size_t), wk_box(v, size_t));
-        return slice;
 }
-@
-
-上述代码所用的 \type{get_snippet_id_by_tag} 函数可将片段引用标记转化为所引用的片段 \type{id}，该函数定义如下：
-
-@ 有名片段内容抽取过程所需的辅助函数 # +
-static ssize_t get_snippet_id_by_tag(WKTree *syntax_tree, WKStr *snippet_name, WKStr *tag_name) {
-        WKStr *a = compact_text(snippet_name, xi_skipped_chars_in_snippet_name);
-        WKStr *a_tag = compact_text(tag_name, xi_skipped_chars_in_snippet_name);
-        WKArray *level2 = syntax_tree->root->lower;
-        ssize_t id = -1;
-        for (size_t i = 0; i < level2->n; i++) {
-                WKBranch *it = wk_array_get(level2, i, WKBranch *);
-                XISyntax *snippet = wk_branch_get(it, XISyntax *);
-                if (snippet->type != XI_SNIPPET_WITH_NAME) continue;
-                WKArray *level3 = it->lower;
-                WKBranch *x_bra = wk_array_get(level3, 0, WKBranch *);
-                XISyntax *x = wk_branch_get(x_bra, XISyntax *);
-                WKStr *x_content = wk_link_get(x->tokens->head, XIToken *)->content;
-                WKStr *b = compact_text(x_content, xi_skipped_chars_in_snippet_name);
-                if (strcmp(a->body, b->body) != 0) {
-                        wk_str_free(b);
-                        continue;
-                }
-                for (size_t j = 1; j < level3->n; j++) {
-                        WKBranch *it_j = wk_array_get(level3, j, WKBranch *);
-                        XISyntax *snippet_j = wk_branch_get(it_j, XISyntax *);
-                        if (snippet_j->type != XI_SNIPPET_TAG) continue;
-                        XIToken *b_tag_token = wk_link_get(snippet_j->tokens->head, XIToken *);
-                        WKStr *b_tag = compact_text(b_tag_token->content,
-                                                    xi_skipped_chars_in_snippet_name);
-                        if (strcmp(a_tag->body, b_tag->body) != 0) {
-                                wk_str_free(b_tag);
-                                continue;
-                        }
-                        id = snippet->id;
-                        wk_str_free(b_tag);
-                        break;
-                }
-                wk_str_free(b);
-        }
-        wk_str_free(a);
-        wk_str_free(a_tag);
-        return id;
-}
-@
-
-@ 外境 # ^+
-#include <stdint.h> /* for SIZE_MAX */
 @
 
 汇集片段内容抽取过程的代码片段：
@@ -2366,7 +2126,7 @@ static ssize_t get_snippet_id_by_tag(WKTree *syntax_tree, WKStr *snippet_name, W
 
 \subsection{排版配置}
 
-Xi 不局限于排版语言，无名片段可直接输出，但是有名片段的各种标记需要转换为特定排版语言所支持的形式。需要通过 xi 的配置文件将这些形式告知 xi，方能完成文档格式的输出。Xi 的配置文件支持以下配置选项：
+xi 不局限于排版语言，无名片段可直接输出，但是有名片段的各种标记需要转换为特定排版语言所支持的形式。需要通过 xi 的配置文件将这些形式告知 xi，方能完成文档格式的输出。xi 的配置文件支持以下配置选项：
 
 \startitemize
 \item \type{snippet_start}：片段开始标记，可用占位符 \type{${language}}；
@@ -2412,7 +2172,7 @@ typedef struct {
 XIFmt *xi_fmt;
 @
 
-Xi 配置文件中格式化输出配置选项的解析过程如下：
+xi 配置文件中格式化输出配置选项的解析过程如下：
 
 @ 配置文件解析 # +
 xi_fmt = malloc(sizeof(XIFmt));
@@ -2920,26 +2680,16 @@ if (xi_fmt->snippet_reference->n > 0) {
         } else {
                 fprintf(output, "%s", xi_symbols->snippet_reference_stop_mark->body);
         }
-        /* 获得切片下标 */
-        size_t u = 0, v = SIZE_MAX;
-        WKPair *slice = snippet_slice(syntax_tree, x_syntax->id, y, &j);
-        u = wk_box_get(slice->x, size_t);
-        v = wk_box_get(slice->y, size_t);
-        wk_box_free(slice->x); wk_box_free(slice->y); wk_pair_free(slice);
-        /* 输出片段 id 序列 */
+        /* 输出片段 id 序列：同名片段，只输出首个 id */
         WKStr *z_id_text = wk_str(NULL);
-        for (size_t k = 0; k < tie->spatial_order->n; k++) {
-                WKBranch *z_bra = wk_array_get(tie->spatial_order, k, WKBranch *);
-                XISyntax *z = wk_branch_get(z_bra, XISyntax *);
-                size_t z_id = z->id;
-                if (z_id < u || z_id > v) continue;
-                wk_str_printf(z_id_text, "%lu", z_id);
-                if (xi_fmt->snippet_reference_id->n > 0) {
-                        WKStr *z_id_fmt = wk_str(xi_fmt->snippet_reference_id->body);
-                        wk_str_replace(z_id_fmt, "${id}", z_id_text->body);
-                        fprintf(output, "%s", z_id_fmt->body);
-                        wk_str_free(z_id_fmt);
-                }
+        WKBranch *z_bra = wk_array_get(tie->spatial_order, 0, WKBranch *);
+        XISyntax *z = wk_branch_get(z_bra, XISyntax *);
+        wk_str_printf(z_id_text, "%lu", z->id);
+        if (xi_fmt->snippet_reference_id->n > 0) {
+                WKStr *z_id_fmt = wk_str(xi_fmt->snippet_reference_id->body);
+                wk_str_replace(z_id_fmt, "${id}", z_id_text->body);
+                fprintf(output, "%s", z_id_fmt->body);
+                wk_str_free(z_id_fmt);
         }
         wk_str_free(z_id_text);
 } else {
@@ -2958,7 +2708,8 @@ if (xi_fmt->snippet_emission->n > 0) {
         WKBox *tie_box = wk_table_query(relations, wk_box_ref(x_key, WKStr *));
         if (tie_box) {
                 XITie *tie = wk_box_get(tie_box, XITie *);
-                if (tie->emissions->n > 0) {
+                if (tie->emissions->n > 0
+                    && x == wk_array_get(tie->spatial_order, 0, WKBranch *)) {
                         WKStr *e_id = wk_str(NULL);
                         for (size_t i = 0; i < tie->emissions->n; i++) {
                                 WKBranch *e = wk_array_get(tie->emissions, i, WKBranch *);
@@ -3146,17 +2897,10 @@ for (size_t j = 0; j < y->lower->n; j++) {
                         yaml_output_multilines(output, z_tok->content->body, "        ");
                         fprintf(output, "'\n"
                                         "      ids:\n");
-                        /* 获得切片下标 */
-                        size_t u = 0, v = SIZE_MAX;
-                        WKPair *slice = snippet_slice(syntax_tree, x_syntax->id, y, &j);
-                        u = wk_box_get(slice->x, size_t);
-                        v = wk_box_get(slice->y, size_t);
-                        wk_box_free(slice->x); wk_box_free(slice->y); wk_pair_free(slice);
                         /* 输出所引用的片段 id */
                         for (size_t k = 0; k < tie->spatial_order->n; k++) {
                                 WKBranch *z_ref = wk_array_get(tie->spatial_order, k, WKBranch *);
                                 XISyntax *z_ref_syntax = wk_branch_get(z_ref, XISyntax *);
-                                if (z_ref_syntax->id < u ||  z_ref_syntax->id > v) continue;
                                 fprintf(output, "        - %lu\n", z_ref_syntax->id);
                         }
                 } else {
@@ -3176,7 +2920,8 @@ WKStr *x_key = compact_text(x_name, xi_skipped_chars_in_snippet_name);
 WKBox *tie_box = wk_table_query(relations, wk_box_ref(x_key, WKStr *));
 if (tie_box) {
         XITie *tie = wk_box_get(tie_box, XITie *);
-        if (tie->emissions->n > 0) {
+        if (tie->emissions->n > 0
+            && x == wk_array_get(tie->spatial_order, 0, WKBranch *)) {
                 fprintf(output, "  emissions:\n");
                 for (size_t i = 0; i < tie->emissions->n; i++) {
                         WKBranch *e = wk_array_get(tie->emissions, i, WKBranch *);
@@ -3205,7 +2950,7 @@ wk_str_free(x_key);
 
 \section{界面}
 
-Xi 的最终形式是一个命令行程序，拥有以下命令选项：
+xi 的最终形式是一个命令行程序，拥有以下命令选项：
 
 \startitemize
 \item \type{--tangle} 或 \type{-t}，用于抽取代码片段；
@@ -3310,6 +3055,38 @@ if (entrances->n != outputs->n) {
 }
 @
 
+\noindent 上述代码中用于分割字符串的函数 \type{str_split}，其定义如下
+
+@ xi 的数据结构与辅助函数 # +
+WKArray *str_split(const char *str, const char *sep) {
+        /* 主动在 str 的内容尾部追加 sep，从而将分割过程限制在一个循环里 */
+        WKStr *str_1 = wk_str(str);
+        wk_str_suffix(str_1, sep);
+        /* 根据 sep 分割 */
+        WKArray *a = wk_array(WKStr *);
+        const char *p = str_1->body;
+        const char *q = p;
+        size_t n = strlen(sep);
+        while (1) {
+                q = strstr(q, sep);
+                if (q) {
+                        WKStr *s = wk_str(NULL);
+                        for (const char *r = p; r != q; r++) {
+                                wk_str_suffix_char(s, *r);
+                        }
+                        if (s->n > 0) {
+                                wk_str_trim(s);
+                                wk_array_add(a, s, WKStr *);
+                        } else wk_str_free(s);
+                        q += n;
+                        p = q;
+                } else break;
+        }
+        wk_str_free(str_1);
+        return a;
+}
+@
+
 以下代码解析配置文件，构造符号表，读入文学程序文件并完成词法和语法分析：
 
 @ xi 核心过程 #
@@ -3344,7 +3121,7 @@ for (size_t i = 0; i < entrances->n; i++) {
                 exit(EXIT_FAILURE);
         }
         xi_tangle(xi_file_path, xi_tree, relations,
-                  entrance, 0, SIZE_MAX, 0, indents, line_opt, output);
+                  entrance, 0, indents, line_opt, output);
         fclose(output);
 }
 for (WKLink *it = indents->head; it; it = it->next) {
@@ -3399,7 +3176,7 @@ int main(int argc, char **argv) {
 
 断断续续，每天无聊到发慌时，便写几行，历时两月有余，orez 变成了 xi。原先，我对 orez 不满之处，现在皆已填平，可心里又有了新的不满。
 
-Xi 程序本身是以它所支持的文学编程形式编写的。这个程序写得并不太好。我的本意是希望它能蕴含一些文学性，可是每当需要引出一些代码片段时，我会不由自主地陷入这样一种叙述方式，\type{xxxx 的实现如下……}。这不叫文学，这叫说明书吧……应该有更好的叙事方式，只是自古至今，没人去思考该如何去叙述一个程序。
+xi 程序本身是以它所支持的文学编程形式编写的。这个程序写得并不太好。我的本意是希望它能蕴含一些文学性，可是每当需要引出一些代码片段时，我会不由自主地陷入这样一种叙述方式，\type{xxxx 的实现如下……}。这不叫文学，这叫说明书吧……应该有更好的叙事方式，只是自古至今，没人去思考该如何去叙述一个程序。
 
 也许更好的叙事方式是，自然语言部分不应当总是陷入为程序语言服务的角色，而是以文学的方式描述程序片段的一些意象。程序片段本身则是意象的实体，甚至未必不能将一个程序写成小说。当然，这只是我的猜测，而我现在并无能力和足够的时间去做一些尝试了。
 

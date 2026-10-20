@@ -1,5 +1,3 @@
-#include <stdint.h> /* for SIZE_MAX */
-/* 该头文件已包含 wk-str.h, wk-array.h, wk-list.h, wk-table.h 等 */
 #include <wk-cfg.h>
 #include <wk-tree.h>
 #include <wk-cli.h>
@@ -16,8 +14,6 @@ typedef enum {
         XI_TAG_STOP_MARK, /* 有名片段标签终结符 */
         XI_SNIPPET_REFERENCE_START_MARK, /* 有名片段引用开始符 */
         XI_SNIPPET_REFERENCE_STOP_MARK, /* 有名片段引用终结符 */
-        XI_SNIPPET_SLICE_START_MARK, /* 有名片段切片起始位置（0, here 或片段标签） */
-        XI_SNIPPET_SLICE_STOP_MARK,  /* 有名片段切片终止位置（here 或片段标签） */
         XI_TEXT /* 普通文本 */
 } XITokenType;
 typedef struct {
@@ -37,10 +33,7 @@ typedef struct {
         WKStr *tag_stop_mark;
         WKStr *snippet_reference_start_mark;
         WKStr *snippet_reference_stop_mark;
-        WKStr *snippet_slice_start_mark;
-        WKStr *snippet_slice_stop_mark;
 } XISymbols;
-
 XISymbols *xi_symbols;
 #define XI_USER_CONFIG(user_config, xi_symbols, item) do { \
         WKBox *v = wk_table_query(user_config, wk_box_ref(#item, const char *)); \
@@ -69,33 +62,6 @@ typedef struct {
 } XIFmt;
 
 XIFmt *xi_fmt;
-WKArray *str_split(const char *str, const char *sep) {
-        /* 主动在 str 的内容尾部追加 sep，从而将分割过程限制在一个循环里 */
-        WKStr *str_1 = wk_str(str);
-        wk_str_suffix(str_1, sep);
-        /* 根据 sep 分割 */
-        WKArray *a = wk_array(WKStr *);
-        const char *p = str_1->body;
-        const char *q = p;
-        size_t n = strlen(sep);
-        while (1) {
-                q = strstr(q, sep);
-                if (q) {
-                        WKStr *s = wk_str(NULL);
-                        for (const char *r = p; r != q; r++) {
-                                wk_str_suffix_char(s, *r);
-                        }
-                        if (s->n > 0) {
-                                wk_str_trim(s);
-                                wk_array_add(a, s, WKStr *);
-                        } else wk_str_free(s);
-                        q += n;
-                        p = q;
-                } else break;
-        }
-        wk_str_free(str_1);
-        return a;
-}
 static bool here_is_me(const char *a, const char *b,
                        const char *here, int dir, WKStr *me) {
         size_t n = me->n;
@@ -134,17 +100,14 @@ static int read_char(FILE *xi_file, WKStr *cache) {
 static bool tail_is_snippet_delimiter(WKStr *cache) {
         WKStr *snippet_delimiter = xi_symbols->snippet_delimiter;
         if (snippet_delimiter->n > cache->n) return false;
-        /* 令 p 指向缓冲区末尾 snippet_delimiter->n 个字节之首 */
         const char *p = cache->body + cache->n - snippet_delimiter->n;
         if (strcmp(p, snippet_delimiter->body) != 0) return false;
         if (p == cache->body) return true;
-        /* 构造字符串区间 [a, b) */
+        /* 构造字符串区间 [a, b)，若该区间存在不可忽略的字符，结果为 false，否则为 true */
         const char *a = cache->body;
         const char *b = p;
-        /* 向左探测 */
         p = xi_skip(a, b, p, -1, xi_skipped_chars);
-        if (p == a) return true;
-        else return (*(p - 1) == '\n') ? true : false;
+        return (p == a || *(p - 1) == '\n') ? true : false;
 }
 static void add_snippet(WKList *tokens, WKStr *cache) {
         XIToken *snippet = malloc(sizeof(XIToken));
@@ -407,40 +370,6 @@ static WKPair *find_snippet_reference(WKStr *content)
                 return result;
         } else return NULL;
 }
-/* 创建切片起止记号，添加到 x 之前 */
-static void add_snippet_slice_token(WKList *tokens, WKLink *x, WKStr *after_snippet_ref) {
-        XIToken *t = wk_link_get(x, XIToken *);
-        WKStr *slice_start_mark = xi_symbols->snippet_slice_start_mark;
-        WKStr *slice_stop_mark = xi_symbols->snippet_slice_stop_mark;
-        WKPair *block = find_block(after_snippet_ref, slice_start_mark, slice_stop_mark);
-        if (block) {
-                WKStr *slice_raw = get_block(after_snippet_ref, block);
-                WKArray *slice = str_split(slice_raw->body, ",");
-                if (slice->n !=2) {
-                        fprintf(stderr,
-                                "Illegal snippet slice in line %lu!\n",
-                                t->line_number);
-                        exit(EXIT_FAILURE);
-                }
-                for (size_t i = 0; i < slice->n; i++) {
-                        XIToken *new_t = malloc(sizeof(XIToken));
-                        WKStr *content = wk_array_get(slice, i, WKStr *);
-                        if (i == 0) new_t->type = XI_SNIPPET_SLICE_START_MARK;
-                        else new_t->type = XI_SNIPPET_SLICE_STOP_MARK;
-                        new_t->line_number = t->line_number;
-                        block = find_block(content,
-                                           xi_symbols->tag_start_mark,
-                                           xi_symbols->tag_stop_mark);
-                        if (block) {
-                                new_t->content = get_block(content, block);
-                                wk_str_free(content);
-                        } else new_t->content = content;
-                        WK_LIST_INSF(tokens, x, &new_t);
-                }
-                wk_array_free(slice);
-                wk_str_free(slice_raw);
-        }
-}
 static void split_snippet(WKList *tokens, WKLink *x, WKPair *snippet_reference) {
         WKStr *ref_start_mark = xi_symbols->snippet_reference_start_mark;
         WKStr *ref_stop_mark = xi_symbols->snippet_reference_stop_mark;
@@ -490,24 +419,9 @@ static void split_snippet(WKList *tokens, WKLink *x, WKPair *snippet_reference) 
         /* 更新行号 */
         t->line_number = line_number;
         /* 片段引用之后的内容 */
-        WKStr *e = wk_str(NULL); /* 片段引用之后的同行内容（不包含换行符） */
-        WKStr *f = wk_str(NULL); /* e 之后的内容 */
-        bool after_reference = true;
-        for (const char *p = ref_stop; *p != '\0'; p++) {
-                if (after_reference) {
-                         /* 收集与片段引用之后与片段引用终止符同一行的文本 */
-                        if (*p == '\n') {
-                                after_reference = false;
-                                wk_str_suffix_char(f, *p);
-                        } else wk_str_suffix_char(e, *p);
-                } else wk_str_suffix_char(f, *p);
-        }
-        if (e->n > 0) { /* 析取片段切片 */
-                add_snippet_slice_token(tokens, x, e);
-        }
-        wk_str_free(e);
+        WKStr *f = wk_str(NULL);
+        for (const char *p = ref_stop; *p != '\0'; p++) wk_str_suffix_char(f, *p);
         wk_str_free(t->content);
-        /* 剩余内容仍存于 t */
         t->content = f;
 }
 static void delete_tokens(WKList *tokens) {
@@ -531,9 +445,9 @@ static WKList *xi_lexer(FILE *xi_file) {
                 else {
                         bool t = tail_is_snippet_delimiter(cache);
                         if (t) {
-                                size_t length = xi_symbols->snippet_delimiter->n;
-                                size_t begin = cache->n - length;
-                                wk_str_del(cache, begin, length);
+                                size_t sni_del_length = xi_symbols->snippet_delimiter->n;
+                                size_t sni_del_begin = cache->n - sni_del_length;
+                                wk_str_del(cache, sni_del_begin, sni_del_length);
                                 add_snippet(xi_tokens, cache);
                                 add_snippet_delimiter(xi_tokens);
                                 cache = wk_str(NULL); /* 刷新 cache */
@@ -727,8 +641,6 @@ typedef enum {
         XI_SNIPPET_TAG,
         XI_SNIPPET_CONTENT,
         XI_SNIPPET_REFERENCE,
-        XI_SNIPPET_SLICE_START,
-        XI_SNIPPET_SLICE_STOP,
         XI_SNIPPET_TEXT
 } XISyntaxType;
 typedef struct {
@@ -907,24 +819,6 @@ static void add_branches_for_snippet_content(WKTree *syntax_tree, WKBranch *x)
                         wk_tree_add(syntax_tree, x, reference, XISyntax *);
                         /* 让片段引用结束符作为当前节点 */
                         it = it->next;
-                } else if (token->type == XI_SNIPPET_SLICE_START_MARK) {
-                        /* 构造片段切片起点 */
-                        token = wk_link_get(it, XIToken *);
-                        XISyntax *slice_start = malloc(sizeof(XISyntax));
-                        slice_start->type = XI_SNIPPET_SLICE_START;
-                        slice_start->tokens = wk_list(XIToken *);
-                        slice_start->id = 0;
-                        wk_list_suffix(slice_start->tokens, token, XIToken *);
-                        wk_tree_add(syntax_tree, x, slice_start, XISyntax *);
-                        /* 构造片段切片终点 */
-                        it = it->next;
-                        token = wk_link_get(it, XIToken *);
-                        XISyntax *slice_stop = malloc(sizeof(XISyntax));
-                        slice_stop->type = XI_SNIPPET_SLICE_STOP;
-                        slice_stop->tokens = wk_list(XIToken *);
-                        slice_stop->id = 0;
-                        wk_list_suffix(slice_stop->tokens, token, XIToken *);
-                        wk_tree_add(syntax_tree, x, slice_stop, XISyntax *);
                 } else {
                         XISyntax *text = malloc(sizeof(XISyntax));
                         text->type = XI_SNIPPET_TEXT;
@@ -1174,91 +1068,17 @@ static WKStr *cascade_indents(WKList *indents) {
         }
         return current_indent;
 }
-static ssize_t get_snippet_id_by_tag(WKTree *syntax_tree, WKStr *snippet_name, WKStr *tag_name) {
-        WKStr *a = compact_text(snippet_name, xi_skipped_chars_in_snippet_name);
-        WKStr *a_tag = compact_text(tag_name, xi_skipped_chars_in_snippet_name);
-        WKArray *level2 = syntax_tree->root->lower;
-        ssize_t id = -1;
-        for (size_t i = 0; i < level2->n; i++) {
-                WKBranch *it = wk_array_get(level2, i, WKBranch *);
-                XISyntax *snippet = wk_branch_get(it, XISyntax *);
-                if (snippet->type != XI_SNIPPET_WITH_NAME) continue;
-                WKArray *level3 = it->lower;
-                WKBranch *x_bra = wk_array_get(level3, 0, WKBranch *);
-                XISyntax *x = wk_branch_get(x_bra, XISyntax *);
-                WKStr *x_content = wk_link_get(x->tokens->head, XIToken *)->content;
-                WKStr *b = compact_text(x_content, xi_skipped_chars_in_snippet_name);
-                if (strcmp(a->body, b->body) != 0) {
-                        wk_str_free(b);
-                        continue;
-                }
-                for (size_t j = 1; j < level3->n; j++) {
-                        WKBranch *it_j = wk_array_get(level3, j, WKBranch *);
-                        XISyntax *snippet_j = wk_branch_get(it_j, XISyntax *);
-                        if (snippet_j->type != XI_SNIPPET_TAG) continue;
-                        XIToken *b_tag_token = wk_link_get(snippet_j->tokens->head, XIToken *);
-                        WKStr *b_tag = compact_text(b_tag_token->content,
-                                                    xi_skipped_chars_in_snippet_name);
-                        if (strcmp(a_tag->body, b_tag->body) != 0) {
-                                wk_str_free(b_tag);
-                                continue;
-                        }
-                        id = snippet->id;
-                        wk_str_free(b_tag);
-                        break;
-                }
-                wk_str_free(b);
-        }
-        wk_str_free(a);
-        wk_str_free(a_tag);
-        return id;
-}
-static WKPair *snippet_slice(WKTree *syntax_tree, size_t here, WKBranch *x_body, size_t *i) {
-        size_t u = 0, v = SIZE_MAX;
-        WKBranch *snippet_ref_bra = wk_array_get(x_body->lower, *i, WKBranch *);
-        XISyntax *snippet_ref = wk_branch_get(snippet_ref_bra, XISyntax *);
-        XIToken *snippet_ref_tok = wk_link_get(snippet_ref->tokens->head, XIToken *);
-        WKBranch *start_bra = wk_array_get(x_body->lower, *i + 1, WKBranch *);
-        XISyntax *start = wk_branch_get(start_bra, XISyntax *);
-        if (start->type == XI_SNIPPET_SLICE_START) {
-                XIToken *start_tok = wk_link_get(start->tokens->head, XIToken *);
-                if (strcmp(start_tok->content->body, "0") != 0) {
-                        if (strcmp(start_tok->content->body, "here") == 0) u = here;
-                        else {
-                                ssize_t id = get_snippet_id_by_tag(syntax_tree,
-                                                                   snippet_ref_tok->content,
-                                                                   start_tok->content);
-                                if (id > 0) u = id;
-                        }
-                }
-                WKBranch *stop_bra = wk_array_get(x_body->lower, *i + 2, WKBranch *);
-                XISyntax *stop = wk_branch_get(stop_bra, XISyntax *);
-                XIToken *stop_tok = wk_link_get(stop->tokens->head, XIToken *);
-                if (strcmp(stop_tok->content->body, "here") == 0) v = here;
-                else {
-                        ssize_t id = get_snippet_id_by_tag(syntax_tree,
-                                                           snippet_ref_tok->content,
-                                                           stop_tok->content);
-                        if (id > 0) v = id;
-                }
-                *i += 2;
-        }
-        WKPair *slice = wk_pair(wk_box(u, size_t), wk_box(v, size_t));
-        return slice;
-}
 static WKStr *last_blank_line(XISyntax *a) {
+        if (a->type != XI_SNIPPET_TEXT) return NULL;
         WKStr *blank_line = wk_str(NULL);
-        XIToken *t = wk_link_get(a->tokens->head, XIToken *);
-        if (t->content->n > 1) {
-                WKStr *u = t->content;
-                const char *head = u->body;
-                const char *tail = u->body + u->n;
-                const char *p = tail;
-                p = xi_skip(head, tail, p, -1, xi_skipped_chars);
-                if (p != head && *(p - 1) == '\n') {
-                        for (const char *q = p; *q != '\0'; q++) {
-                                wk_str_suffix_char(blank_line, *q);
-                        }
+        XIToken *a_tok = wk_link_get(a->tokens->head, XIToken *);
+        const char *head = a_tok->content->body;
+        const char *tail = head + a_tok->content->n;
+        const char *p = tail;
+        p = xi_skip(head, tail, p, -1, xi_skipped_chars);
+        if (p != head && *(p - 1) == '\n') {
+                for (const char *q = p; *q != '\0'; q++) {
+                        wk_str_suffix_char(blank_line, *q);
                 }
         }
         return blank_line;
@@ -1267,9 +1087,7 @@ static void xi_tangle(const char *xi_file_path,
                       WKTree *syntax_tree,
                       WKTable *relations,
                       WKStr *entrance,
-                      size_t begin, /* 区间开始 id */
-                      size_t end,   /* 区间终止 id */
-                      size_t here,  /* 当前最大的 here 值 */
+                      size_t here,  /* 递归路径上节点 id 值的最大值，初值为 0 */
                       WKList *indents, /* 用于记录所引用的片段的缩进层次 */
                       bool show_line_number, /* 用于控制输出的内容是否包含行号 */
                       FILE *output) {
@@ -1280,11 +1098,16 @@ static void xi_tangle(const char *xi_file_path,
 		exit(EXIT_FAILURE);
         }
 	XITie *tie = wk_box_get(tie_box, XITie *);
+        /* 获得入口片段的 id */
+        if (here == 0) {
+                WKBranch *last_bra = wk_array_get(tie->spatial_order, tie->spatial_order->n - 1, WKBranch *);
+                XISyntax *last = wk_branch_get(last_bra, XISyntax *);
+                here = last->id;
+        }
         for (size_t i = 0; i < tie->time_order->n; i++) {
                 WKBranch *x_bra = wk_array_get(tie->time_order, i, WKBranch *);
                 XISyntax *x = wk_branch_get(x_bra, XISyntax *);
-                if (x->id < begin || x->id > end) continue;
-                if (here < x->id) here = x->id;
+                if (i > 0 && x->id > here) continue; /* 同名片段，会被 here 截断 */
                 WKBranch *x_body_bra = wk_array_get(x_bra->lower, x_bra->lower->n - 1, WKBranch *);
 		for (size_t j = 0; j < x_body_bra->lower->n; j++) {
 			WKBranch *a_bra = wk_array_get(x_body_bra->lower, j, WKBranch *);
@@ -1295,23 +1118,18 @@ static void xi_tangle(const char *xi_file_path,
                                         /* 获得缩进 */
                                 	WKBranch *prev = wk_array_get(x_body_bra->lower, j - 1, WKBranch *);
                                         XISyntax *y = wk_branch_get(prev, XISyntax *);
-                                        if (y->type == XI_SNIPPET_TEXT) {
-                                                WKStr *blank_line = last_blank_line(y);
+                                        WKStr *blank_line = last_blank_line(y);
+                                        if (blank_line) {
                                                 wk_list_prefix(indents, blank_line, WKStr *);
                                         }
-                                        /* 获得切片下标 */
-                                        size_t u = 0, v = SIZE_MAX;
-                                        WKPair *slice = snippet_slice(syntax_tree, here, x_body_bra, &j);
-                                        u = wk_box_get(slice->x, size_t);
-                                        v = wk_box_get(slice->y, size_t);
-                                        wk_box_free(slice->x); wk_box_free(slice->y); wk_pair_free(slice);
                                         /* 抽取代码 */
                                         xi_tangle(xi_file_path, syntax_tree, relations,
-                                                  a_tok->content, u, v, here, indents, show_line_number, output);
+                                                  a_tok->content, here, indents, show_line_number, output);
                                         /* 删除当前层次的缩进 */
-                                	WKStr *current_indent = wk_link_get(indents->head, WKStr *);
-                                        wk_str_free(current_indent);
-                                	wk_list_del(indents, indents->head);
+                                        if (blank_line) {
+                                                wk_str_free(blank_line);
+                                                wk_list_del(indents, indents->head);
+                                        }
                                 }
                         } else {
                                 WKStr *text = a_tok->content;
@@ -1673,26 +1491,16 @@ static void output_snippet_with_name(WKTree *syntax_tree, WKBranch *x, WKTable *
                                                         } else {
                                                                 fprintf(output, "%s", xi_symbols->snippet_reference_stop_mark->body);
                                                         }
-                                                        /* 获得切片下标 */
-                                                        size_t u = 0, v = SIZE_MAX;
-                                                        WKPair *slice = snippet_slice(syntax_tree, x_syntax->id, y, &j);
-                                                        u = wk_box_get(slice->x, size_t);
-                                                        v = wk_box_get(slice->y, size_t);
-                                                        wk_box_free(slice->x); wk_box_free(slice->y); wk_pair_free(slice);
-                                                        /* 输出片段 id 序列 */
+                                                        /* 输出片段 id 序列：同名片段，只输出首个 id */
                                                         WKStr *z_id_text = wk_str(NULL);
-                                                        for (size_t k = 0; k < tie->spatial_order->n; k++) {
-                                                                WKBranch *z_bra = wk_array_get(tie->spatial_order, k, WKBranch *);
-                                                                XISyntax *z = wk_branch_get(z_bra, XISyntax *);
-                                                                size_t z_id = z->id;
-                                                                if (z_id < u || z_id > v) continue;
-                                                                wk_str_printf(z_id_text, "%lu", z_id);
-                                                                if (xi_fmt->snippet_reference_id->n > 0) {
-                                                                        WKStr *z_id_fmt = wk_str(xi_fmt->snippet_reference_id->body);
-                                                                        wk_str_replace(z_id_fmt, "${id}", z_id_text->body);
-                                                                        fprintf(output, "%s", z_id_fmt->body);
-                                                                        wk_str_free(z_id_fmt);
-                                                                }
+                                                        WKBranch *z_bra = wk_array_get(tie->spatial_order, 0, WKBranch *);
+                                                        XISyntax *z = wk_branch_get(z_bra, XISyntax *);
+                                                        wk_str_printf(z_id_text, "%lu", z->id);
+                                                        if (xi_fmt->snippet_reference_id->n > 0) {
+                                                                WKStr *z_id_fmt = wk_str(xi_fmt->snippet_reference_id->body);
+                                                                wk_str_replace(z_id_fmt, "${id}", z_id_text->body);
+                                                                fprintf(output, "%s", z_id_fmt->body);
+                                                                wk_str_free(z_id_fmt);
                                                         }
                                                         wk_str_free(z_id_text);
                                                 } else {
@@ -1716,7 +1524,8 @@ static void output_snippet_with_name(WKTree *syntax_tree, WKBranch *x, WKTable *
                 WKBox *tie_box = wk_table_query(relations, wk_box_ref(x_key, WKStr *));
                 if (tie_box) {
                         XITie *tie = wk_box_get(tie_box, XITie *);
-                        if (tie->emissions->n > 0) {
+                        if (tie->emissions->n > 0
+                            && x == wk_array_get(tie->spatial_order, 0, WKBranch *)) {
                                 WKStr *e_id = wk_str(NULL);
                                 for (size_t i = 0; i < tie->emissions->n; i++) {
                                         WKBranch *e = wk_array_get(tie->emissions, i, WKBranch *);
@@ -1835,17 +1644,10 @@ static void snippet_with_name_to_yaml(WKTree *syntax_tree,
                                                 yaml_output_multilines(output, z_tok->content->body, "        ");
                                                 fprintf(output, "'\n"
                                                                 "      ids:\n");
-                                                /* 获得切片下标 */
-                                                size_t u = 0, v = SIZE_MAX;
-                                                WKPair *slice = snippet_slice(syntax_tree, x_syntax->id, y, &j);
-                                                u = wk_box_get(slice->x, size_t);
-                                                v = wk_box_get(slice->y, size_t);
-                                                wk_box_free(slice->x); wk_box_free(slice->y); wk_pair_free(slice);
                                                 /* 输出所引用的片段 id */
                                                 for (size_t k = 0; k < tie->spatial_order->n; k++) {
                                                         WKBranch *z_ref = wk_array_get(tie->spatial_order, k, WKBranch *);
                                                         XISyntax *z_ref_syntax = wk_branch_get(z_ref, XISyntax *);
-                                                        if (z_ref_syntax->id < u ||  z_ref_syntax->id > v) continue;
                                                         fprintf(output, "        - %lu\n", z_ref_syntax->id);
                                                 }
                                         } else {
@@ -1864,7 +1666,8 @@ static void snippet_with_name_to_yaml(WKTree *syntax_tree,
         WKBox *tie_box = wk_table_query(relations, wk_box_ref(x_key, WKStr *));
         if (tie_box) {
                 XITie *tie = wk_box_get(tie_box, XITie *);
-                if (tie->emissions->n > 0) {
+                if (tie->emissions->n > 0
+                    && x == wk_array_get(tie->spatial_order, 0, WKBranch *)) {
                         fprintf(output, "  emissions:\n");
                         for (size_t i = 0; i < tie->emissions->n; i++) {
                                 WKBranch *e = wk_array_get(tie->emissions, i, WKBranch *);
@@ -1899,6 +1702,33 @@ static void xi_yaml_output(WKTree *xi_tree,
                         snippet_with_name_to_yaml(xi_tree, x, relations, fmt, output);
                 }
         }
+}
+WKArray *str_split(const char *str, const char *sep) {
+        /* 主动在 str 的内容尾部追加 sep，从而将分割过程限制在一个循环里 */
+        WKStr *str_1 = wk_str(str);
+        wk_str_suffix(str_1, sep);
+        /* 根据 sep 分割 */
+        WKArray *a = wk_array(WKStr *);
+        const char *p = str_1->body;
+        const char *q = p;
+        size_t n = strlen(sep);
+        while (1) {
+                q = strstr(q, sep);
+                if (q) {
+                        WKStr *s = wk_str(NULL);
+                        for (const char *r = p; r != q; r++) {
+                                wk_str_suffix_char(s, *r);
+                        }
+                        if (s->n > 0) {
+                                wk_str_trim(s);
+                                wk_array_add(a, s, WKStr *);
+                        } else wk_str_free(s);
+                        q += n;
+                        p = q;
+                } else break;
+        }
+        wk_str_free(str_1);
+        return a;
 }
 int main(int argc, char **argv) {
         WKArg xi_args[] = {
@@ -1972,9 +1802,7 @@ int main(int argc, char **argv) {
                         .tag_start_mark = wk_str("<"),
                         .tag_stop_mark = wk_str(">"),
                         .snippet_reference_start_mark = wk_str("#"),
-                        .snippet_reference_stop_mark = wk_str("@"),
-                        .snippet_slice_start_mark = wk_str("["),
-                        .snippet_slice_stop_mark = wk_str("]")
+                        .snippet_reference_stop_mark = wk_str("@")
                 };
                 WKTable *user_config = xi_config_path ? wk_cfg(xi_config_path) : NULL;
                 /* 用 user_config 中的设定，替换 xi_config 中的字段 */
@@ -1990,8 +1818,6 @@ int main(int argc, char **argv) {
                         XI_USER_CONFIG(user_config, xi_symbols, tag_stop_mark);
                         XI_USER_CONFIG(user_config, xi_symbols, snippet_reference_start_mark);
                         XI_USER_CONFIG(user_config, xi_symbols, snippet_reference_stop_mark);
-                        XI_USER_CONFIG(user_config, xi_symbols, snippet_slice_start_mark);
-                        XI_USER_CONFIG(user_config, xi_symbols, snippet_slice_stop_mark);
                 }
                 xi_fmt = malloc(sizeof(XIFmt));
                 *xi_fmt = (XIFmt){ wk_str(NULL), wk_str(NULL), wk_str(NULL), wk_str(NULL),
@@ -2069,6 +1895,7 @@ int main(int argc, char **argv) {
                                 fprintf(stderr, "Illegal output!\n");
                                 exit(EXIT_FAILURE);
                         }
+                        /* 得到 entrances 与 outputs */
                         WKList *indents = wk_list(WKStr *);
                         for (size_t i = 0; i < entrances->n; i++) {
                                 WKStr *entrance = wk_array_get(entrances, i, WKStr *);
@@ -2079,7 +1906,7 @@ int main(int argc, char **argv) {
                                         exit(EXIT_FAILURE);
                                 }
                                 xi_tangle(xi_file_path, xi_tree, relations,
-                                          entrance, 0, SIZE_MAX, 0, indents, line_opt, output);
+                                          entrance, 0, indents, line_opt, output);
                                 fclose(output);
                         }
                         for (WKLink *it = indents->head; it; it = it->next) {
@@ -2114,8 +1941,6 @@ int main(int argc, char **argv) {
                 wk_str_free(xi_symbols->tag_stop_mark);
                 wk_str_free(xi_symbols->snippet_reference_start_mark);
                 wk_str_free(xi_symbols->snippet_reference_stop_mark);
-                wk_str_free(xi_symbols->snippet_slice_start_mark);
-                wk_str_free(xi_symbols->snippet_slice_stop_mark);
                 free(xi_symbols);
                 fclose(xi_file);
                 for (size_t i = 0; i < xi_skipped_chars->n; i++) {
