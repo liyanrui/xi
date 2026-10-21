@@ -17,12 +17,12 @@
 
 WEB 也是 Knuth 开发 \TEX\ 排版系统的专用工具。Knuth 用这个词作为他的文学编程工具的名字，是因为他认为，一篇文章或一本书是以网状结构描述事物。例如小说，各种人物的关系构成便是一个网络。WEB 只支持基于 \TEX\ 排版语言和 Pascal 语言的文学编程。后来，Silvio Levy 主导设计了 CWEB，将文学编程的范式引入 C 语言世界。为了扩大排版和编程语言的支持范围，Norman Ramsey 设计并实现了新的文学编程工具 noweb。
 
-现在依然还活着的这些文学编程工具皆已颇为陈旧。WEB 和 CWEB 主要用于维护旧的 \TEX\ 系统。noweb 默认能够支持 \TEX，\LATEX 和 HTML 等排版语言，但若要支持其他排版语言，需要用户自行编写相应的后端程序添加到 noweb 的工作管线，该过程对于一般用户较为困难。
+现在依然还活着的这些文学编程工具皆已颇为陈旧。WEB 和 CWEB 主要用于维护旧的 \TEX\ 系统。noweb 默认能够支持 \TEX，\LATEX 和 HTML 等排版语言，但若要支持其他排版语言，需要编写相应的后端程序，对于一般用户而言并非易事。
 
-2017 年，我写了一个简单的文学编程工具 orez。该工具在 2024 年经过一次全面的重写，除了支持用户自定义文学编程标记之外，变化主要发生在文档方面。事实上，文学程序的修改空间是更大的，即使代码保持不变，文档的修改空间也近乎是无限的。正如物理学家薛定谔所言，我们的任务不是去发现一些别人还没有发现的东西，而是针对所有人都看见的东西做一些从未有过的思考。
+2017 年，我写了一个简单的文学编程工具 orez。2024 年，该工具经过一次全面的重写，除了支持用户自定义文学编程标记之外，变化主要发生在文档方面。事实上，文学程序的修改空间是更大的，即使代码保持不变，文档的修改空间也近乎是无限的。正如物理学家薛定谔所言，我们的任务不是去发现一些别人还没有发现的东西，而是针对所有人都看见的东西做一些从未有过的思考。
 
 \useURL[libwk][https://github.com/liyanrui/wk]
-我的需求，orez 完全能满足，但一直让我介怀的是，它依赖了 GLib 和 LibYAML 这两个大库的少量功能。今年，我穷得只剩下了时间，且不知何去何从，为了让自己不至于过于堕落，便先写了一个很小的 C 库，名曰 WK 库\footnote{\from[libwk]}，使之能完全覆盖 orez 的需求，用以取代 GLib 和 LibYAML。基于 WK 库，我重写了 orez 的文档和源码，并将其重新命名为 xi，在汉语里可对应「兮」，表示该工具简单到只是清淡的语气，它几乎不依赖任何东西。
+我的需求，orez 完全能满足，但它依赖 GLib 和 LibYAML 这两个大库的少量功能。今年，我穷得只剩下了时间，且不知何去何从，为了让自己不至于过于堕落，便先写了一个很小的 C 库，名曰 WK 库\footnote{\from[libwk]}，使之能完全覆盖 orez 的需求，用以取代 GLib 和 LibYAML。基于 WK 库，我重写了 orez 的文档和源码，并将其重新命名为 xi，在汉语里可对应「兮」，表示该工具简单到只是清淡的语气，它几乎不依赖任何东西。
 
 \section[xi-mark]{标记}
 
@@ -1657,7 +1657,7 @@ typedef struct {
 
 \subsection{键}
 
-将 \type{OrezTie} 对象加入有名片段关系表中时，所用的键是片段的名字，但是去除了所有空白字符（空格，缩进，换行符以及续行符）和一些特殊符号，辅助函数 \type{compact_text} 可完成此事，其定义为
+将 \type{XITie} 对象加入有名片段关系表中时，所用的键是片段的名字，但是去除了所有空白字符（空格，缩进，换行符以及续行符）和一些特殊符号，辅助函数 \type{compact_text} 可完成此事，其定义为
 
 @ 有名片段关系表构建过程所需的辅助函数 # [C]
 static WKStr *compact_text(WKStr *a, WKArray *skipped_chars) {
@@ -1977,7 +1977,7 @@ static void xi_tangle(const char *xi_file_path,
                       size_t here,  /* 递归路径上节点 id 值的最大值，初值为 0 */
                       WKList *indents, /* 用于记录所引用的片段的缩进层次 */
                       bool show_line_number, /* 用于控制输出的内容是否包含行号 */
-                      FILE *output) {
+                      WKStr *cache) {
         WKStr *key = compact_text(entrance, xi_skipped_chars_in_snippet_name);
         WKBox *tie_box = wk_table_query(relations, wk_box_ref(key, WKStr *));
         if (!tie_box) {
@@ -1994,8 +1994,17 @@ static void xi_tangle(const char *xi_file_path,
         for (size_t i = 0; i < tie->time_order->n; i++) {
                 WKBranch *x_bra = wk_array_get(tie->time_order, i, WKBranch *);
                 XISyntax *x = wk_branch_get(x_bra, XISyntax *);
-                if (i > 0 && x->id > here) continue; /* 同名片段，会被 here 截断 */
+                WKStr *current_indent = cascade_indents(indents); /* 将各层次的缩进串联起来 */
+                if (i > 0) {
+                        if (x->id > here) {
+                                wk_str_free(current_indent);
+                                continue; /* 同名片段，会被 here 截断 */
+                        }
+                        wk_str_suffix(cache, "\n");  /* 同名片段，从第 2 个开始，头部增加换行 */
+                        wk_str_suffix(cache, current_indent->body);  /* 同名片段首行缩进 */
+                }
                 WKBranch *x_body_bra = wk_array_get(x_bra->lower, x_bra->lower->n - 1, WKBranch *);
+                size_t last_pos = x_body_bra->lower->n - 1;
 		for (size_t j = 0; j < x_body_bra->lower->n; j++) {
 			WKBranch *a_bra = wk_array_get(x_body_bra->lower, j, WKBranch *);
                         XISyntax *a = wk_branch_get(a_bra, XISyntax *);
@@ -2006,6 +2015,7 @@ static void xi_tangle(const char *xi_file_path,
                                 # 输出片段内普通文本 @
 			}
                 }
+                wk_str_free(current_indent);
         }
         wk_str_free(key);
 }
@@ -2015,8 +2025,6 @@ static void xi_tangle(const char *xi_file_path,
 
 @ 输出片段内普通文本 #
 WKStr *text = a_tok->content;
-WKStr *cache = wk_str(NULL);
-WKStr *current_indent = cascade_indents(indents); /* 将各层次的缩进串联起来 */
 if (show_line_number) {
         size_t line = first_token_line_number(a_bra);
         const char *p = text->body;
@@ -2032,30 +2040,26 @@ if (show_line_number) {
 }
 const char *head = text->body;
 const char *tail = text->body + text->n;
-/* 掐头 */
-head = xi_skip(head, tail, head, 1, xi_skipped_chars);
-if (*head == '\n') head++;
-/* 去尾 */
-tail = xi_skip(head, tail, tail, -1, xi_skipped_chars);
-if (*(tail - 1) == '\n') tail--;
-else tail = text->body + text->n;
+/* 首节点掐头 */
+if (j == 0) {
+        head = xi_skip(head, tail, head, 1, xi_skipped_chars);
+        if (*head == '\n') head++;
+}
+/* 尾节点去尾 */
+if (j == last_pos) {
+        tail = xi_skip(head, tail, tail, -1, xi_skipped_chars);
+        if (*(tail - 1) == '\n') tail--;
+}
 /* 有时会出现片段内容为空行的情况，此时 head > tail，需要排除这种情况 */
 if (head < tail) {
-        /* 由于掐头的原因，首行要添加缩进 */
-        wk_str_suffix(cache, current_indent->body);
-        /* 其余各行缩进 */
+        /* 为其余各行添加缩进 */
         for (const char *p = head; p != tail; p++) {
                 wk_str_suffix_char(cache, *p);
                 if (*p == '\n') {
                         wk_str_suffix(cache, current_indent->body);
                 }
         }
-        /* 去尾是为了避开最后一行增加额外的缩进，现在将其归还 */
-        if (*tail == '\n') wk_str_suffix(cache, "\n");
 }
-fputs(cache->body, output);
-wk_str_free(current_indent);
-wk_str_free(cache);
 @
 
 串联各层次缩进的函数 \type{cascade_indents} 的定义如下：
@@ -2104,7 +2108,7 @@ if (j > 0) {
         }
         /* 抽取代码 */
         xi_tangle(xi_file_path, syntax_tree, relations,
-                  a_tok->content, here, indents, show_line_number, output);
+                  a_tok->content, here, indents, show_line_number, cache);
         /* 删除当前层次的缩进 */
         if (blank_line) {
                 wk_str_free(blank_line);
@@ -3120,8 +3124,11 @@ for (size_t i = 0; i < entrances->n; i++) {
                 fprintf(stderr, "Failed to open %s!\n", output_path->body);
                 exit(EXIT_FAILURE);
         }
+        WKStr *cache = wk_str(NULL);
         xi_tangle(xi_file_path, xi_tree, relations,
-                  entrance, 0, indents, line_opt, output);
+                  entrance, 0, indents, line_opt, cache);
+        fputs(cache->body, output);
+        wk_str_free(cache);
         fclose(output);
 }
 for (WKLink *it = indents->head; it; it = it->next) {

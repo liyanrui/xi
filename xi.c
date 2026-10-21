@@ -857,7 +857,7 @@ static void delete_syntax_body(WKBranch *root) {
 static void delete_syntax_tree(WKTree *syntax_tree) {
         delete_syntax_body(syntax_tree->root);
         wk_tree_free(syntax_tree);
-}
+} 
 static size_t first_token_line_number(WKBranch *x) {
         size_t n = 0;
         XISyntax *a = wk_branch_get(x, XISyntax *);
@@ -1090,7 +1090,7 @@ static void xi_tangle(const char *xi_file_path,
                       size_t here,  /* 递归路径上节点 id 值的最大值，初值为 0 */
                       WKList *indents, /* 用于记录所引用的片段的缩进层次 */
                       bool show_line_number, /* 用于控制输出的内容是否包含行号 */
-                      FILE *output) {
+                      WKStr *cache) {
         WKStr *key = compact_text(entrance, xi_skipped_chars_in_snippet_name);
         WKBox *tie_box = wk_table_query(relations, wk_box_ref(key, WKStr *));
         if (!tie_box) {
@@ -1107,8 +1107,17 @@ static void xi_tangle(const char *xi_file_path,
         for (size_t i = 0; i < tie->time_order->n; i++) {
                 WKBranch *x_bra = wk_array_get(tie->time_order, i, WKBranch *);
                 XISyntax *x = wk_branch_get(x_bra, XISyntax *);
-                if (i > 0 && x->id > here) continue; /* 同名片段，会被 here 截断 */
+                WKStr *current_indent = cascade_indents(indents); /* 将各层次的缩进串联起来 */
+                if (i > 0) {
+                        if (x->id > here) {
+                                wk_str_free(current_indent);
+                                continue; /* 同名片段，会被 here 截断 */
+                        }
+                        wk_str_suffix(cache, "\n");  /* 同名片段，从第 2 个开始，头部增加换行 */
+                        wk_str_suffix(cache, current_indent->body);  /* 同名片段首行缩进 */
+                }
                 WKBranch *x_body_bra = wk_array_get(x_bra->lower, x_bra->lower->n - 1, WKBranch *);
+                size_t last_pos = x_body_bra->lower->n - 1;
 		for (size_t j = 0; j < x_body_bra->lower->n; j++) {
 			WKBranch *a_bra = wk_array_get(x_body_bra->lower, j, WKBranch *);
                         XISyntax *a = wk_branch_get(a_bra, XISyntax *);
@@ -1124,7 +1133,7 @@ static void xi_tangle(const char *xi_file_path,
                                         }
                                         /* 抽取代码 */
                                         xi_tangle(xi_file_path, syntax_tree, relations,
-                                                  a_tok->content, here, indents, show_line_number, output);
+                                                  a_tok->content, here, indents, show_line_number, cache);
                                         /* 删除当前层次的缩进 */
                                         if (blank_line) {
                                                 wk_str_free(blank_line);
@@ -1133,8 +1142,6 @@ static void xi_tangle(const char *xi_file_path,
                                 }
                         } else {
                                 WKStr *text = a_tok->content;
-                                WKStr *cache = wk_str(NULL);
-                                WKStr *current_indent = cascade_indents(indents); /* 将各层次的缩进串联起来 */
                                 if (show_line_number) {
                                         size_t line = first_token_line_number(a_bra);
                                         const char *p = text->body;
@@ -1150,32 +1157,29 @@ static void xi_tangle(const char *xi_file_path,
                                 }
                                 const char *head = text->body;
                                 const char *tail = text->body + text->n;
-                                /* 掐头 */
-                                head = xi_skip(head, tail, head, 1, xi_skipped_chars);
-                                if (*head == '\n') head++;
-                                /* 去尾 */
-                                tail = xi_skip(head, tail, tail, -1, xi_skipped_chars);
-                                if (*(tail - 1) == '\n') tail--;
-                                else tail = text->body + text->n;
+                                /* 首节点掐头 */
+                                if (j == 0) {
+                                        head = xi_skip(head, tail, head, 1, xi_skipped_chars);
+                                        if (*head == '\n') head++;
+                                }
+                                /* 尾节点去尾 */
+                                if (j == last_pos) {
+                                        tail = xi_skip(head, tail, tail, -1, xi_skipped_chars);
+                                        if (*(tail - 1) == '\n') tail--;
+                                }
                                 /* 有时会出现片段内容为空行的情况，此时 head > tail，需要排除这种情况 */
                                 if (head < tail) {
-                                        /* 由于掐头的原因，首行要添加缩进 */
-                                        wk_str_suffix(cache, current_indent->body);
-                                        /* 其余各行缩进 */
+                                        /* 为其余各行添加缩进 */
                                         for (const char *p = head; p != tail; p++) {
                                                 wk_str_suffix_char(cache, *p);
                                                 if (*p == '\n') {
                                                         wk_str_suffix(cache, current_indent->body);
                                                 }
                                         }
-                                        /* 去尾是为了避开最后一行增加额外的缩进，现在将其归还 */
-                                        if (*tail == '\n') wk_str_suffix(cache, "\n");
                                 }
-                                fputs(cache->body, output);
-                                wk_str_free(current_indent);
-                                wk_str_free(cache);
 			}
                 }
+                wk_str_free(current_indent);
         }
         wk_str_free(key);
 }
@@ -1894,8 +1898,7 @@ int main(int argc, char **argv) {
                         if (entrances->n != outputs->n) {
                                 fprintf(stderr, "Illegal output!\n");
                                 exit(EXIT_FAILURE);
-                        }
-                        /* 得到 entrances 与 outputs */
+                        } /* 得到 entrances 与 outputs */
                         WKList *indents = wk_list(WKStr *);
                         for (size_t i = 0; i < entrances->n; i++) {
                                 WKStr *entrance = wk_array_get(entrances, i, WKStr *);
@@ -1905,8 +1908,11 @@ int main(int argc, char **argv) {
                                         fprintf(stderr, "Failed to open %s!\n", output_path->body);
                                         exit(EXIT_FAILURE);
                                 }
+                                WKStr *cache = wk_str(NULL);
                                 xi_tangle(xi_file_path, xi_tree, relations,
-                                          entrance, 0, indents, line_opt, output);
+                                          entrance, 0, indents, line_opt, cache);
+                                fputs(cache->body, output);
+                                wk_str_free(cache);
                                 fclose(output);
                         }
                         for (WKLink *it = indents->head; it; it = it->next) {
