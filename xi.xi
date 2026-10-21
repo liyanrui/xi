@@ -112,7 +112,7 @@ void foobar(void) {
 }
 \stoptyping
 
-运算符 \type{+} 意味着当前有名片段会被追加到上一个同名片段的尾部。如果我们想将一个有名片段在累加时放在另一个有名片段之前，还需要引入一个运算符用于修饰 \type{+}，表示向前追加，xi 默认用 \type{^} 作为该修饰符，例如
+运算符 \type{+} 意味着当前有名片段会被追加到上一个同名片段的尾部。如果我们想将一个有名片段在累加时放在另一个有名片段之前，还需要引入一个运算符用于修饰 \type{+}，表示向前追加，xi 默认用 \type{^} 作为该修饰符\footnote{在标准键盘上，\type{^} 与数字 6 位于同一键位。}，例如
 
 \starttyping
 ESC_AT foobar ESC_SHARP
@@ -1201,7 +1201,7 @@ typedef enum {
 } XISyntaxType;
 @
 
-\noindent \type{tokens} 为构成语法节点的记号列表，词法分析输出的记号列表会在语法树的构造过程中逐步被分解到语法树的叶层节点里，非叶层节点的 \type{tokens} 字段为 \type{NULL}。\type{id} 字段只对有名片段有意义，且从 1 开始逐一递增，对于无名片段以及其他类型的语法节点，其值为 0。
+\noindent \type{tokens} 为构成语法节点的记号列表，词法分析输出的记号列表会在语法树的构造过程中逐步被分解到语法树的叶层节点里。非叶层节点的 \type{tokens} 字段为 \type{NULL}。\type{id} 字段只对有名片段有意义，且从 1 开始逐一递增，对于无名片段以及其他类型的语法节点，其值为 0。
 
 在语法分析过程中，所构建的语法节点依序存入由 WK 库的 WKTree 模块提供的 N 叉树容器，先引入该模块的头文件：
 
@@ -1225,17 +1225,16 @@ static WKTree *syntax_tree_init(WKList *tokens) {
                 if (t->type == XI_SNIPPET_DELIMITER) {
                         WKLink *prev = it->prev;
                         if (prev) {
-                                XISyntax *snippet = malloc(sizeof(XISyntax));
-                                /* 默认类型，后续会确定它是否为有名片段 */
-                                snippet->type = XI_SNIPPET;
-                                snippet->tokens = wk_list(XIToken *);
-                                snippet->id = 0;
+                                XISyntax *x = malloc(sizeof(XISyntax));
+                                x->type = XI_SNIPPET; /* 默认类型，后续会确定它是否为有名片段 */
+                                x->tokens = wk_list(XIToken *);
+                                x->id = 0;
                                 # 为片段收集记号并确定片段类型 @
-                                /* 之前在记号列表尾部强行插入了一个片段界限记号，
-                                   它可能会导致语法节点的内容为空，故而需要予以忽略 */
-                                if (snippet->tokens) {
-                                        wk_tree_add(xi_tree, xi_tree->root, snippet, XISyntax *);
-                                } else free(snippet);
+                                /* 注意，词法分析阶段，在记号列表尾部强行插入了一个片段界限记号，
+                                   若该记号之前也是片段界限记号，会导致 x 的内容为空，需要予以忽略 */
+                                if (x->tokens) {
+                                        wk_tree_add(xi_tree, xi_tree->root, x, XISyntax *);
+                                } else free(x);
                         }
                 }
         }
@@ -1247,26 +1246,26 @@ static WKTree *syntax_tree_init(WKList *tokens) {
                         free(t);
                 }
         }
-        /* 有用的记号已转移到语法树，销毁记号列表容器已完成使命 */
+        /* 有用的记号皆已转移到语法树，销毁记号列表容器已完成使命 */
         wk_list_free(tokens);
         return xi_tree;
 }
 @
 
-构造片段所包含的记号子集以及片段类型的代码如下：
+从 \type{prev} 所指记号开始，逆序遍历记号列表，为新建片段 \type{x} 收集记号并确定片段类型，该过程为
 
 @ 为片段收集记号并确定片段类型 #
 WKLink *a = prev;
 while (1) {
         if (a) {
-                XIToken *t_a = wk_link_get(a, XIToken *);
-                if (t_a->type == XI_SNIPPET_DELIMITER) break;
+                XIToken *x_tok = wk_link_get(a, XIToken *);
+                if (x_tok->type == XI_SNIPPET_DELIMITER) break;
                 else {
-                        if (t_a->type == XI_SNIPPET_NAME_DELIMITER) {
-                                snippet->type = XI_SNIPPET_WITH_NAME;
-                                snippet->id = id++;
+                        if (x_tok->type == XI_SNIPPET_NAME_DELIMITER) {
+                                x->type = XI_SNIPPET_WITH_NAME;
+                                x->id = id++;
                         }
-                        wk_list_prefix(snippet->tokens, t_a, XIToken *);
+                        wk_list_prefix(x->tokens, x_tok, XIToken *);
                 }
         } else break;
         a = a->prev;
@@ -1277,41 +1276,41 @@ while (1) {
 
 假设语法树的第二层节点中，节点 \type{x} 为有名片段节点，则需基于其记号序列构造语法节点，且所有记号会被转移到后者之中。该过程结束后，语法树第 2 层的有名片段节点中的语法单元便不再持有记号序列，亦即记号序列字段的值为空指针。
 
-首先，对于语法树 \type{syntax_tree} 中任一有名片段的语法节点 \type{x}，初始化迭代指针 \type{it}，使之指向 \type{x} 中语法单元的记号序列首节点，并获得当前记号 \type{current_token}：
+首先，对于语法树 \type{syntax_tree} 中任一有名片段的语法节点 \type{x_bra}，初始化迭代指针 \type{it}，使之指向 \type{x_bra} 中语法单元 \type{x} 的记号序列首节点，并获得当前记号 \type{x_tok}：
 
 @ 有名片段的子节点集构造过程 #
-XISyntax *snippet = wk_branch_get(x, XISyntax *);
-WKLink *it = snippet->tokens->head;
-XIToken *current_token = wk_link_get(it, XIToken *);
+XISyntax *x = wk_branch_get(x_bra, XISyntax *);
+WKLink *it = x->tokens->head;
+XIToken *x_tok = wk_link_get(it, XIToken *);
 @
 
 有名片段的第一个记号应当是片段名，其语法节点构造过程如下：
 
 @ 有名片段的子节点集构造过程 # +
-XISyntax *snippet_name = malloc(sizeof(XISyntax));
-snippet_name->type = XI_SNIPPET_NAME;
-snippet_name->tokens = wk_list(XIToken *);
-snippet_name->id = 0;
-wk_list_suffix(snippet_name->tokens, current_token, XIToken *);
-wk_tree_add(syntax_tree, x, snippet_name, XISyntax *);
+XISyntax *x_name = malloc(sizeof(XISyntax));
+x_name->type = XI_SNIPPET_NAME;
+x_name->tokens = wk_list(XIToken *);
+x_name->id = 0;
+wk_list_suffix(x_name->tokens, x_tok, XIToken *);
+wk_tree_add(syntax_tree, x_bra, x_name, XISyntax *);
 @
 
 移动 \type{it} 使之跳过片段名界限符，然后构造可能存在的语言标记节点：
 
 @ 有名片段的子节点集构造过程 # +
 it = it->next->next; /* 跳过片段名字界限符 */
-current_token = wk_link_get(it, XIToken *);
-if (current_token->type == XI_LANGUAGE_START_MARK) {
-        XISyntax *language = malloc(sizeof(XISyntax));
+x_tok = wk_link_get(it, XIToken *);
+if (x_tok->type == XI_LANGUAGE_START_MARK) {
+        XISyntax *x_lang = malloc(sizeof(XISyntax));
         it = it->next;
-        current_token = wk_link_get(it, XIToken *);
-        language->type = XI_SNIPPET_LANGUAGE;
-        language->tokens = wk_list(XIToken *);
-        language->id = 0;
-        wk_list_suffix(language->tokens, current_token, XIToken *);
-        wk_tree_add(syntax_tree, x, language, XISyntax *);
+        x_tok = wk_link_get(it, XIToken *);
+        x_lang->type = XI_SNIPPET_LANGUAGE;
+        x_lang->tokens = wk_list(XIToken *);
+        x_lang->id = 0;
+        wk_list_suffix(x_lang->tokens, x_tok, XIToken *);
+        wk_tree_add(syntax_tree, x_bra, x_lang, XISyntax *);
         it = it->next;
-        current_token = wk_link_get(it, XIToken *);
+        x_tok = wk_link_get(it, XIToken *);
         it = it->next; /* 跳过语言标记终结符 */
 }
 @
@@ -1319,8 +1318,8 @@ if (current_token->type == XI_LANGUAGE_START_MARK) {
 然后构造可能存在的标签引用节点：
 
 @ 有名片段的子节点集构造过程 # +
-current_token = wk_link_get(it, XIToken *);
-if (current_token->type == XI_TAG_START_MARK) {
+x_tok = wk_link_get(it, XIToken *);
+if (x_tok->type == XI_TAG_START_MARK) {
         bool is_tag_ref = false;
         for (WKLink *it_a = it; it_a; it_a = it_a->next) {
                XIToken *t = wk_link_get(it_a, XIToken *);
@@ -1331,14 +1330,14 @@ if (current_token->type == XI_TAG_START_MARK) {
                 }
         }
         if (is_tag_ref) {
-                XISyntax *tag_ref = malloc(sizeof(XISyntax));
+                XISyntax *x_tag_ref = malloc(sizeof(XISyntax));
                 it = it->next;
-                current_token = wk_link_get(it, XIToken *);
-                tag_ref->type = XI_SNIPPET_TAG_REFERENCE;
-                tag_ref->tokens = wk_list(XIToken *);
-                tag_ref->id = 0;
-                wk_list_suffix(tag_ref->tokens, current_token, XIToken *);
-                wk_tree_add(syntax_tree, x, tag_ref, XISyntax *);
+                x_tok = wk_link_get(it, XIToken *);
+                x_tag_ref->type = XI_SNIPPET_TAG_REFERENCE;
+                x_tag_ref->tokens = wk_list(XIToken *);
+                x_tag_ref->id = 0;
+                wk_list_suffix(x_tag_ref->tokens, x_tok, XIToken *);
+                wk_tree_add(syntax_tree, x_bra, x_tag_ref, XISyntax *);
                 /* 跳过标签引用结束符 */
                 it = it->next->next;
         }
@@ -1348,22 +1347,22 @@ if (current_token->type == XI_TAG_START_MARK) {
 继而构造可能存在的运算符节点：
 
 @ 有名片段的子节点集构造过程 # +
-current_token = wk_link_get(it, XIToken *);
-XISyntax *operator = NULL;
-if (current_token->type == XI_SNIPPET_APPENDING_MARK) {
-        operator = malloc(sizeof(XISyntax));
-        operator->type = XI_SNIPPET_APPENDING_OPERATOR;
-        operator->id = 0;
+x_tok = wk_link_get(it, XIToken *);
+XISyntax *x_op = NULL;
+if (x_tok->type == XI_SNIPPET_APPENDING_MARK) {
+        x_op = malloc(sizeof(XISyntax));
+        x_op->type = XI_SNIPPET_APPENDING_OPERATOR;
+        x_op->id = 0;
 }
-if (current_token->type == XI_SNIPPET_PREPENDING_MARK) {
-        operator = malloc(sizeof(XISyntax));
-        operator->type = XI_SNIPPET_PREPENDING_OPERATOR;
-        operator->id = 0;
+if (x_tok->type == XI_SNIPPET_PREPENDING_MARK) {
+        x_op = malloc(sizeof(XISyntax));
+        x_op->type = XI_SNIPPET_PREPENDING_OPERATOR;
+        x_op->id = 0;
 }
-if (operator) {
-        operator->tokens = wk_list(XIToken *);
-        wk_list_suffix(operator->tokens, current_token, XIToken *);
-        wk_tree_add(syntax_tree, x, operator, XISyntax *);
+if (x_op) {
+        x_op->tokens = wk_list(XIToken *);
+        wk_list_suffix(x_op->tokens, x_tok, XIToken *);
+        wk_tree_add(syntax_tree, x_bra, x_op, XISyntax *);
         it = it->next;
 }
 @
@@ -1371,16 +1370,16 @@ if (operator) {
 之后便是构造可能存在的标签节点：
 
 @ 有名片段的子节点集构造过程 # +
-current_token = wk_link_get(it, XIToken *);
-if (current_token->type == XI_TAG_START_MARK) {
-        XISyntax *tag = malloc(sizeof(XISyntax));
+x_tok = wk_link_get(it, XIToken *);
+if (x_tok->type == XI_TAG_START_MARK) {
+        XISyntax *x_tag = malloc(sizeof(XISyntax));
         it = it->next;
-        current_token = wk_link_get(it, XIToken *);
-        tag->type = XI_SNIPPET_TAG;
-        tag->tokens = wk_list(XIToken *);
-        tag->id = 0;
-        wk_list_suffix(tag->tokens, current_token, XIToken *);
-        wk_tree_add(syntax_tree, x, tag, XISyntax *);
+        x_tok = wk_link_get(it, XIToken *);
+        x_tag->type = XI_SNIPPET_TAG;
+        x_tag->tokens = wk_list(XIToken *);
+        x_tag->id = 0;
+        wk_list_suffix(x_tag->tokens, x_tok, XIToken *);
+        wk_tree_add(syntax_tree, x_bra, x_tag, XISyntax *);
         /* 跳过标签结束符 */
         it = it->next->next;
 }
@@ -1389,29 +1388,29 @@ if (current_token->type == XI_TAG_START_MARK) {
 余下部分，便是有名片段的内容部分，其语法节点构造过程如下：
 
 @ 有名片段的子节点集构造过程 # +
-XISyntax *content = malloc(sizeof(XISyntax));
-content->type = XI_SNIPPET_CONTENT;
-content->tokens = wk_list(XIToken *);
-content->id = 0;
+XISyntax *x_content = malloc(sizeof(XISyntax));
+x_content->type = XI_SNIPPET_CONTENT;
+x_content->tokens = wk_list(XIToken *);
+x_content->id = 0;
 for (WKLink *it_a = it; it_a; it_a = it_a->next) {
-        current_token = wk_link_get(it_a, XIToken *);
-        wk_list_suffix(content->tokens, current_token, XIToken *);
+        x_tok = wk_link_get(it_a, XIToken *);
+        wk_list_suffix(x_content->tokens, x_tok, XIToken *);
 }
-wk_tree_add(syntax_tree, x, content, XISyntax *);
+wk_tree_add(syntax_tree, x_bra, x_content, XISyntax *);
 @
 
 一些不需要进入语法树的记号，需要从记号列表中剔除：
 
 @ 释放不需要进入语法树的记号 #
-for (it = snippet->tokens->head; it; it = it->next) {
-        current_token = wk_link_get(it, XIToken *);
-        if (current_token->type == XI_SNIPPET_NAME_DELIMITER
-            || current_token->type == XI_LANGUAGE_START_MARK
-            || current_token->type == XI_LANGUAGE_STOP_MARK
-            || current_token->type == XI_TAG_START_MARK
-            || current_token->type == XI_TAG_STOP_MARK) {
-                wk_str_free(current_token->content);
-                free(current_token);
+for (it = x->tokens->head; it; it = it->next) {
+        x_tok = wk_link_get(it, XIToken *);
+        if (x_tok->type == XI_SNIPPET_NAME_DELIMITER
+            || x_tok->type == XI_LANGUAGE_START_MARK
+            || x_tok->type == XI_LANGUAGE_STOP_MARK
+            || x_tok->type == XI_TAG_START_MARK
+            || x_tok->type == XI_TAG_STOP_MARK) {
+                wk_str_free(x_tok->content);
+                free(x_tok);
         }
 }
 @
@@ -1419,15 +1418,14 @@ for (it = snippet->tokens->head; it; it = it->next) {
 至此，有名片段语法单元 \type{snippet} 里的记号序列，其内容已全部转移至其子节点集，故而需将其置空：
 
 @ 清空有名片段语法单元的记号序列 #
-wk_list_free(snippet->tokens);
-snippet->tokens = NULL;
+wk_list_free(x->tokens);
+x->tokens = NULL;
 @
 
 将上述过程汇总为一个专用的辅助函数：
 
 @ 语法分析过程所需的辅助函数 # +
-static void add_branches_for_snippet_with_name(WKTree *syntax_tree, WKBranch *x)
-{
+static void add_branches_for_snippet_with_name(WKTree *syntax_tree, WKBranch *x_bra) {
         # 有名片段的子节点集构造过程 @
         # 释放不需要进入语法树的记号 @
         # 清空有名片段语法单元的记号序列 @
@@ -1439,10 +1437,10 @@ static void add_branches_for_snippet_with_name(WKTree *syntax_tree, WKBranch *x)
 @ 为有名片段构造子节点集 # [C]
 WKArray *branches = xi_tree->root->lower;
 for (size_t i = 0; i < branches->n; i++) {
-        WKBranch *p = wk_array_get(branches, i, WKBranch *);
-        XISyntax *snippet = wk_branch_get(p, XISyntax *);
-        if (snippet->type == XI_SNIPPET_WITH_NAME) {
-                add_branches_for_snippet_with_name(xi_tree, p);
+        WKBranch *x_bra = wk_array_get(branches, i, WKBranch *);
+        XISyntax *x = wk_branch_get(x_bra, XISyntax *);
+        if (x->type == XI_SNIPPET_WITH_NAME) {
+                add_branches_for_snippet_with_name(xi_tree, x_bra);
         }
 }
 @
@@ -1456,25 +1454,24 @@ for (size_t i = 0; i < branches->n; i++) {
 \item \type{XI_SNIPPET_TEXT}
 \stopitemize
 
-\noindent 假设语法树的第三层节点 \type{x} 的类型为 \type{XI_SNIPPET_CONTENT}，需为其构造子节点集，过程如下：
+\noindent 假设语法树的第三层节点 \type{x_bra} 中语法单元 \type{x} 的类型为 \type{XI_SNIPPET_CONTENT}，需为其构造子节点集，过程如下：
 
 @ 语法分析过程所需的辅助函数 # +
-static void add_branches_for_snippet_content(WKTree *syntax_tree, WKBranch *x)
-{
-        XISyntax *content = wk_branch_get(x, XISyntax *);
-        WKLink *it = content->tokens->head;
+static void add_branches_for_snippet_content(WKTree *syntax_tree, WKBranch *x_bra) {
+        XISyntax *x = wk_branch_get(x_bra, XISyntax *);
+        WKLink *it = x->tokens->head;
         while (it) {
-                XIToken *token = wk_link_get(it, XIToken *);
-                if (token->type == XI_SNIPPET_REFERENCE_START_MARK) {
+                XIToken *x_tok = wk_link_get(it, XIToken *);
+                if (x_tok->type == XI_SNIPPET_REFERENCE_START_MARK) {
                         it = it->next;
-                        token = wk_link_get(it, XIToken *);
+                        x_tok = wk_link_get(it, XIToken *);
                         /* 构造片段引用 */
-                        XISyntax *reference = malloc(sizeof(XISyntax));
-                        reference->type = XI_SNIPPET_REFERENCE;
-                        reference->tokens = wk_list(XIToken *);
-                        reference->id = 0;
-                        wk_list_suffix(reference->tokens, token, XIToken *);
-                        wk_tree_add(syntax_tree, x, reference, XISyntax *);
+                        XISyntax *ref = malloc(sizeof(XISyntax));
+                        ref->type = XI_SNIPPET_REFERENCE;
+                        ref->tokens = wk_list(XIToken *);
+                        ref->id = 0;
+                        wk_list_suffix(ref->tokens, x_tok, XIToken *);
+                        wk_tree_add(syntax_tree, x_bra, ref, XISyntax *);
                         /* 让片段引用结束符作为当前节点 */
                         it = it->next;
                 } else {
@@ -1482,87 +1479,50 @@ static void add_branches_for_snippet_content(WKTree *syntax_tree, WKBranch *x)
                         text->type = XI_SNIPPET_TEXT;
                         text->tokens = wk_list(XIToken *);
                         text->id = 0;
-                        wk_list_suffix(text->tokens, token, XIToken *);
-                        wk_tree_add(syntax_tree, x, text, XISyntax *);
+                        wk_list_suffix(text->tokens, x_tok, XIToken *);
+                        wk_tree_add(syntax_tree, x_bra, text, XISyntax *);
                 }
                 it = it->next;
         }
-        /* 释放 content->tokens */
-        for (it = content->tokens->head; it; it = it->next) {
-                XIToken *token = wk_link_get(it, XIToken *);
-                if (token->type == XI_SNIPPET_REFERENCE_START_MARK
-                    || token->type == XI_SNIPPET_REFERENCE_STOP_MARK) {
-                        wk_str_free(token->content);
-                        free(token);
+        /* 释放 x->tokens */
+        for (it = x->tokens->head; it; it = it->next) {
+                XIToken *x_tok = wk_link_get(it, XIToken *);
+                if (x_tok->type == XI_SNIPPET_REFERENCE_START_MARK
+                    || x_tok->type == XI_SNIPPET_REFERENCE_STOP_MARK) {
+                        wk_str_free(x_tok->content);
+                        free(x_tok);
                 }
         }
-        wk_list_free(content->tokens);
-        content->tokens = NULL;
+        wk_list_free(x->tokens);
+        x->tokens = NULL;
 }
 @
 
-设语法树为 \type{xi_tree}，为语法树中第三层所有类型为 \type{XI_SNIPPET_CONTENT} 的节点构造子节点集的代码如下：
+为语法树 \type{xi_tree} 第三层所有类型为 \type{XI_SNIPPET_CONTENT} 的节点构造子节点集，
 
 @ 为有名片段的内容节点构造子节点集 #
 WKArray *second_level_branches = xi_tree->root->lower;
 for (size_t i = 0; i < second_level_branches->n; i++) {
-        WKBranch *p = wk_array_get(second_level_branches, i, WKBranch *);
-        XISyntax *a = wk_branch_get(p, XISyntax *);
-        if (a->type == XI_SNIPPET_WITH_NAME) {
-                WKArray *third_level_branches = p->lower;
+        WKBranch *x_bra = wk_array_get(second_level_branches, i, WKBranch *);
+        XISyntax *x = wk_branch_get(x_bra, XISyntax *);
+        if (x->type == XI_SNIPPET_WITH_NAME) {
+                WKArray *third_level_branches = x_bra->lower;
                 for (size_t j = 0; j < third_level_branches->n; j++) {
-                        WKBranch *q = wk_array_get(third_level_branches, j, WKBranch *);
-                        XISyntax *b = wk_branch_get(q, XISyntax *);
-                        if (b->type == XI_SNIPPET_CONTENT) {
-                                add_branches_for_snippet_content(xi_tree, q);
+                        WKBranch *y_bra = wk_array_get(third_level_branches, j, WKBranch *);
+                        XISyntax *y = wk_branch_get(y_bra, XISyntax *);
+                        if (y->type == XI_SNIPPET_CONTENT) {
+                                add_branches_for_snippet_content(xi_tree, y_bra);
                         }
                 }
         }
 }
 @
 
-\subsection{小结}
+\subsection{语法树访问与释放}
 
-汇集语法分析相关的代码片段：
+\type{first_token_line_number} 可以获取语法树中任一节点内容的首行行号，其定义为
 
-@ xi 的数据结构与辅助函数 # +
-# 语法单元 @
-# 语法分析过程所需的辅助函数 @
-# 辅助函数 delete_syntax_tree，用于释放语法树 @ 
-# 辅助函数 first_token_line_number，用于获取语法树节点的首行行号 @
-static WKTree *xi_parser(WKList *tokens) {
-        WKTree *xi_tree = syntax_tree_init(tokens);
-        # 为有名片段构造子节点集 @
-        # 为有名片段的内容节点构造子节点集 @
-        return xi_tree;
-}
-@
-
-辅助函数 \type{delete_syntax_tree} 的定义如下
-
-@ 辅助函数 delete_syntax_tree，用于释放语法树 # [C]
-static void delete_syntax_body(WKBranch *root) {
-        if (!root) return;
-        XISyntax *body = wk_branch_get(root, XISyntax *);
-        if (body) {
-                if (body->tokens) delete_tokens(body->tokens);
-                free(body);
-        }
-        if (root->lower) {
-                for (size_t i = 0; i < root->lower->n; i++) {
-                        delete_syntax_body(wk_array_get(root->lower, i, WKBranch *));
-                }
-        }
-}
-static void delete_syntax_tree(WKTree *syntax_tree) {
-        delete_syntax_body(syntax_tree->root);
-        wk_tree_free(syntax_tree);
-}
-@
-
-辅助函数 \type{first_token_line_number} 的定义为
-
-@ 辅助函数 first_token_line_number，用于获取语法树节点的首行行号 # [C]
+@ first_token_line_number # [C]
 static size_t first_token_line_number(WKBranch *x) {
         size_t n = 0;
         XISyntax *a = wk_branch_get(x, XISyntax *);
@@ -1582,10 +1542,11 @@ static size_t first_token_line_number(WKBranch *x) {
 }
 @
 
-函数 \type{xi_print_syntax_tree} 可用于查看语法分析结果，其定义如下：
+\type{xi_print_syntax_tree} 用于查看语法分析结果，其定义为
 
 @ xi_print_syntax_tree # [C]
-static void print_syntax_tree(WKBranch *root) {
+# xi_print_tokens @
+static void xi_print_syntax_tree(WKBranch *root) {
         if (!root) return;
         XISyntax *a = wk_branch_get(root, XISyntax *);
         if (a) {
@@ -1641,6 +1602,46 @@ static void print_syntax_tree(WKBranch *root) {
 }
 @
 
+\type{xi_delete_syntax_tree} 函数用于释放语法树内存，其定义为
+
+@ xi_delete_syntax_tree # [C]
+static void delete_syntax_body(WKBranch *root) {
+        if (!root) return;
+        XISyntax *x = wk_branch_get(root, XISyntax *);
+        if (x) {
+                if (x->tokens) delete_tokens(x->tokens);
+                free(x);
+        }
+        if (root->lower) {
+                for (size_t i = 0; i < root->lower->n; i++) {
+                        delete_syntax_body(wk_array_get(root->lower, i, WKBranch *));
+                }
+        }
+}
+static void xi_delete_syntax_tree(WKTree *syntax_tree) {
+        delete_syntax_body(syntax_tree->root);
+        wk_tree_free(syntax_tree);
+}
+@
+
+\subsection{小结}
+
+汇集语法分析相关的代码片段：
+
+@ xi 的数据结构与辅助函数 # +
+# 语法单元 @
+# 语法分析过程所需的辅助函数 @
+# first_token_line_number @
+/* # xi_print_syntax_tree @ */
+# xi_delete_syntax_tree @ 
+static WKTree *xi_parser(WKList *tokens) {
+        WKTree *xi_tree = syntax_tree_init(tokens);
+        # 为有名片段构造子节点集 @
+        # 为有名片段的内容节点构造子节点集 @
+        return xi_tree;
+}
+@
+
 \section{联系}
 
 片段有了名字，就有了最基本的纠缠——一个片段可以引用另一个片段。现在需要为有名片段建立一个关系表，呈现它们之间的引用关系。关系表的数据结构基于 WK 库的 WKTable 模块提供的散列表实现。关系表里存储的数据，其结构为
@@ -1657,7 +1658,7 @@ typedef struct {
 
 \subsection{键}
 
-将 \type{XITie} 对象加入有名片段关系表中时，所用的键是片段的名字，但是去除了所有空白字符（空格，缩进，换行符以及续行符）和一些特殊符号，辅助函数 \type{compact_text} 可完成此事，其定义为
+将 \type{XITie} 对象加入有名片段关系表中时，所用的键是片段的名字，但需要取出其中所有空白字符（空格，缩进，换行符以及续行符）和一些特殊符号，辅助函数 \type{compact_text} 可完成此事，
 
 @ 有名片段关系表构建过程所需的辅助函数 # [C]
 static WKStr *compact_text(WKStr *a, WKArray *skipped_chars) {
@@ -1670,29 +1671,29 @@ static WKStr *compact_text(WKStr *a, WKArray *skipped_chars) {
 }
 @
 
-全局变量 \type{xi_skipped_chars_in_snippet_name} 存储了空白字符和续行符，专用作程序片段名中可忽略的字符集，其定义、初始化及释放过程如下：
+全局变量 \type{xi_skipped_chars_in_name} 存储了空白字符和续行符，专用作程序片段名中可忽略的字符集，其定义、初始化及释放过程如下：
 
 @ 全局变量 # +
-WKArray *xi_skipped_chars_in_snippet_name;
+WKArray *xi_skipped_chars_in_name;
 @
 
-@ 构造冗白字符集 xi_skipped_chars_in_snippet_name #
-xi_skipped_chars_in_snippet_name = wk_array(const char *);
-wk_array_add(xi_skipped_chars_in_snippet_name, " ", const char *);
-wk_array_add(xi_skipped_chars_in_snippet_name, "　", const char *);
-wk_array_add(xi_skipped_chars_in_snippet_name, "\t", const char *);
-wk_array_add(xi_skipped_chars_in_snippet_name, "\n", const char *);
-wk_array_add(xi_skipped_chars_in_snippet_name,
+@ 构造冗白字符集 xi_skipped_chars_in_name #
+xi_skipped_chars_in_name = wk_array(const char *);
+wk_array_add(xi_skipped_chars_in_name, " ", const char *);
+wk_array_add(xi_skipped_chars_in_name, "　", const char *);
+wk_array_add(xi_skipped_chars_in_name, "\t", const char *);
+wk_array_add(xi_skipped_chars_in_name, "\n", const char *);
+wk_array_add(xi_skipped_chars_in_name,
              xi_symbols->snippet_name_continuation->body,
              const char *);
-wk_array_add(xi_skipped_chars_in_snippet_name, "\'", const char *);
-wk_array_add(xi_skipped_chars_in_snippet_name, "\"", const char *);
+wk_array_add(xi_skipped_chars_in_name, "\'", const char *);
+wk_array_add(xi_skipped_chars_in_name, "\"", const char *);
 /* 如有需要，可继续添加 */
 /* ... ... ... */
 @
 
 @ xi 进程资源回收 # +
-wk_array_free(xi_skipped_chars_in_snippet_name);
+wk_array_free(xi_skipped_chars_in_name);
 @
 
 \subsection[relations]{关系表初始化}
@@ -1700,41 +1701,41 @@ wk_array_free(xi_skipped_chars_in_snippet_name);
 对于语法树中任一有名片段节点 \type{x}，将其存入表 \type{relations} 的过程如下
 
 @ 有名片段关系表构建过程所需的辅助函数 # +
-static void init_tie(WKTable *relations, WKBranch *x) {
+static void init_tie(WKTable *relations, WKBranch *x_bra) {
         WKStr *x_name = NULL;
-        # 从 x 的子节点获取片段名并将其存于 x_name @
+        # 从 x_bra 的子节点获取片段名并将其存于 x_name @
         if (!x_name) {
-                fprintf(stderr, "Line %lu: Illegal snipet.\n", first_token_line_number(x));
+                fprintf(stderr, "Line %lu: Illegal snipet.\n", first_token_line_number(x_bra));
                 exit(EXIT_FAILURE);
         }
-        WKStr *key = compact_text(x_name, xi_skipped_chars_in_snippet_name);
+        WKStr *key = compact_text(x_name, xi_skipped_chars_in_name);
         WKBox *tie_box = wk_table_query(relations, wk_box_ref(key, WKStr *));
         if (tie_box) {
                 XITie *tie = wk_box_get(tie_box, XITie *);        
                 bool has_appending_operator = false;
                 bool has_prepending_operator = false;
-                WKStr *tag_ref = NULL;
-                # 检测 x 是否含有标签引用和运算符 @
-                if (tag_ref) {
-                        WKStr *t = compact_text(tag_ref, xi_skipped_chars_in_snippet_name);
+                WKStr *x_tag_ref = NULL;
+                # 检测 x_bra 是否含有标签引用和运算符 @
+                if (x_tag_ref) {
+                        WKStr *t = compact_text(x_tag_ref, xi_skipped_chars_in_name);
                         int id = -1;
                         # 从时间（程序逻辑）序列中寻找与 t 相同的标签 -> id @
                         # 根据运算符，在时间序列中，\
-                          将 x 插入到 t 对应的同名节点之前或之后 @
+                          将 x_bra 插入到 t 对应的同名节点之前或之后 @
                         wk_str_free(t);
                 } else {
                         # 根据运算符，在时间序列中，\
-                          将 x 插入到同名节点之前或之后 @
+                          将 x_bra 插入到同名节点之前或之后 @
                 }
-                wk_array_add(tie->spatial_order, x, WKBranch *);
+                wk_array_add(tie->spatial_order, x_bra, WKBranch *);
                 wk_str_free(key);
-        } else { /* 将 x 添加至 relations */
+        } else { /* 将 x_bra 添加至 relations */
                 XITie *tie = malloc(sizeof(XITie));
                 tie->time_order = wk_array(WKBranch *);
                 tie->spatial_order = wk_array(WKBranch *);
                 tie->emissions = wk_array(WKBranch *);
-                wk_array_add(tie->time_order, x, WKBranch *);
-                wk_array_add(tie->spatial_order, x, WKBranch *);
+                wk_array_add(tie->time_order, x_bra, WKBranch *);
+                wk_array_add(tie->spatial_order, x_bra, WKBranch *);
                 wk_table_add(relations, wk_pair(wk_box(key, WKStr *), wk_box(tie, XITie *)));
         }
 }
@@ -1742,31 +1743,31 @@ static void init_tie(WKTable *relations, WKBranch *x) {
 
 \noindent 单从语法而言，\type{x} 的第 1 个子节点便应是片段名节点，但稳妥起见，获取片段名的过程依然是用了穷举的方式，且后续检测 \type{x} 是否含有标签引用和运算符的过程也沿袭此法。
 
-@ 从 x 的子节点获取片段名并将其存于 x_name #
-for (size_t i = 0; i < x->lower->n; i++) {
-        WKBranch *y = wk_array_get(x->lower, i, WKBranch *);
-        XISyntax *y_syntax = wk_branch_get(y, XISyntax *);
-        if (y_syntax->type == XI_SNIPPET_NAME) {
-                XIToken *x_name_token = wk_link_get(y_syntax->tokens->head, XIToken *);
-                x_name = x_name_token->content;
+@ 从 x_bra 的子节点获取片段名并将其存于 x_name #
+for (size_t i = 0; i < x_bra->lower->n; i++) {
+        WKBranch *y_bra = wk_array_get(x_bra->lower, i, WKBranch *);
+        XISyntax *y = wk_branch_get(y_bra, XISyntax *);
+        if (y->type == XI_SNIPPET_NAME) {
+                XIToken *x_name_tok = wk_link_get(y->tokens->head, XIToken *);
+                x_name = x_name_tok->content;
                 break;
         }
 }
 @
 
-@ 检测 x 是否含有标签引用和运算符 #
-for (size_t i = 0; i < x->lower->n; i++) {
-        WKBranch *y = wk_array_get(x->lower, i, WKBranch *);
-        XISyntax *y_syntax = wk_branch_get(y, XISyntax *);
-        if (y_syntax->type == XI_SNIPPET_TAG_REFERENCE) {
-                XIToken *tag_ref_token = wk_link_get(y_syntax->tokens->head, XIToken *);
-                tag_ref = tag_ref_token->content;
+@ 检测 x_bra 是否含有标签引用和运算符 #
+for (size_t i = 0; i < x_bra->lower->n; i++) {
+        WKBranch *y_bra = wk_array_get(x_bra->lower, i, WKBranch *);
+        XISyntax *y = wk_branch_get(y_bra, XISyntax *);
+        if (y->type == XI_SNIPPET_TAG_REFERENCE) {
+                XIToken *x_tag_ref_tok = wk_link_get(y->tokens->head, XIToken *);
+                x_tag_ref = x_tag_ref_tok->content;
         }
-        if (y_syntax->type == XI_SNIPPET_APPENDING_OPERATOR) {
+        if (y->type == XI_SNIPPET_APPENDING_OPERATOR) {
                 has_appending_operator = true;
                 break;
         }
-        if (y_syntax->type == XI_SNIPPET_PREPENDING_OPERATOR) {
+        if (y->type == XI_SNIPPET_PREPENDING_OPERATOR) {
                 has_prepending_operator = true;
                 break;
         }
@@ -1778,13 +1779,13 @@ for (size_t i = 0; i < x->lower->n; i++) {
 @ 从时间（程序逻辑）序列中寻找与 t 相同的标签 -> id #
 size_t hits = 0;
 for (int i = 0; i < tie->time_order->n; i++) {
-        WKBranch *y = wk_array_get(tie->time_order, i, WKBranch *);
-        for (size_t j = 0; j < y->lower->n; j++) {
-                WKBranch *z = wk_array_get(y->lower, j, WKBranch *);
-                XISyntax *z_syntax = wk_branch_get(z, XISyntax *);
-                if (z_syntax->type == XI_SNIPPET_TAG) {
-                        XIToken *tag_token = wk_link_get(z_syntax->tokens->head, XIToken *);
-                        WKStr *s = compact_text(tag_token->content, xi_skipped_chars_in_snippet_name);
+        WKBranch *y_bra = wk_array_get(tie->time_order, i, WKBranch *);
+        for (size_t j = 0; j < y_bra->lower->n; j++) {
+                WKBranch *z_bra = wk_array_get(y_bra->lower, j, WKBranch *);
+                XISyntax *z = wk_branch_get(z_bra, XISyntax *);
+                if (z->type == XI_SNIPPET_TAG) {
+                        XIToken *x_tag_tok = wk_link_get(z->tokens->head, XIToken *);
+                        WKStr *s = compact_text(x_tag_tok->content, xi_skipped_chars_in_name);
                         if (strcmp(s->body, t->body) == 0) {
                                 id = i;
                                 hits++;
@@ -1794,56 +1795,52 @@ for (int i = 0; i < tie->time_order->n; i++) {
         }
 }
 if (hits > 1) {
-        fprintf(stderr, "Line %lu: repeated tag <%s>!\n", first_token_line_number(x), t->body);
+        fprintf(stderr, "Line %lu: repeated tag <%s>!\n", first_token_line_number(x_bra), t->body);
         exit(EXIT_FAILURE);
 }
 if (id < 0) {
-        fprintf(stderr, "Line %lu: The referenced tag does not exist.\n", first_token_line_number(x));
+        fprintf(stderr, "Line %lu: The referenced tag does not exist.\n", first_token_line_number(x_bra));
         exit(EXIT_FAILURE);
 }
 @
 
 @ 根据运算符，在时间序列中，\
-  将 x 插入到 t 对应的同名节点之前或之后 #
-if (has_appending_operator) {
-        wk_array_ins(tie->time_order, id + 1, x, WKBranch *);
-} else if (has_prepending_operator) {
-        wk_array_ins(tie->time_order, id, x, WKBranch *);
-} else {
+  将 x_bra 插入到 t 对应的同名节点之前或之后 #
+if (has_appending_operator) wk_array_ins(tie->time_order, id + 1, x_bra, WKBranch *);
+else if (has_prepending_operator) wk_array_ins(tie->time_order, id, x_bra, WKBranch *);
+else {
         fprintf(stderr, "Line %lu: The snippet needs an operator.\n",
-                        first_token_line_number(x));
+                        first_token_line_number(x_bra));
         exit(EXIT_FAILURE);
 }
 @
 
-@ 根据运算符，在时间序列中，将 x 插入到同名节点之前或之后 #
-if (has_appending_operator) {
-        wk_array_add(tie->time_order, x, WKBranch *);
-} else if (has_prepending_operator) {
-        wk_array_ins(tie->time_order, 0, x, WKBranch *);
-} else {
+@ 根据运算符，在时间序列中，将 x_bra 插入到同名节点之前或之后 #
+if (has_appending_operator) wk_array_add(tie->time_order, x_bra, WKBranch *);
+else if (has_prepending_operator) wk_array_ins(tie->time_order, 0, x_bra, WKBranch *);
+else {
         fprintf(stderr, "Line %lu: The snippet needs an operator.\n",
-                        first_token_line_number(x));
+                        first_token_line_number(x_bra));
         exit(EXIT_FAILURE);
 }
 @
 
 \subsection{建立有名片段的引用关系}
 
-假设任一有名片段节点 \type{x}，其中含有对其他片段的引用 \type{a}，则以下过程可在有名片段关系表中为二者建立联系：
+假设任一有名片段节点 \type{x_bra}，其中含有对其他片段的引用 \type{a}，则以下过程可在有名片段关系表中为二者建立联系：
 
 @ 有名片段关系表构建过程所需的辅助函数 # +
-static void create_relation(WKTable *relations, WKBranch *x, XISyntax *a)
+static void create_relation(WKTable *relations, WKBranch *x_bra, XISyntax *a)
 {
-        XIToken *t = wk_link_get(a->tokens->head, XIToken *);
-        WKStr *s = compact_text(t->content, xi_skipped_chars_in_snippet_name);
+        XIToken *a_tok = wk_link_get(a->tokens->head, XIToken *);
+        WKStr *s = compact_text(a_tok->content, xi_skipped_chars_in_name);
         WKBox *tie_box = wk_table_query(relations, wk_box_ref(s, WKStr *));
         if (tie_box) {
                 XITie *tie = wk_box_get(tie_box, XITie *);
-                wk_array_add(tie->emissions, x, WKBranch *);
+                wk_array_add(tie->emissions, x_bra, WKBranch *);
         } else {
                 fprintf(stderr, "Line %lu: The snippet named <%s> not existed.\n",
-                                t->line_number, t->content->body);
+                                a_tok->line_number, a_tok->content->body);
                 exit(EXIT_FAILURE);
         }
         wk_str_free(s);
@@ -1857,57 +1854,28 @@ static void create_relation(WKTable *relations, WKBranch *x, XISyntax *a)
 static WKTable *xi_create_relations(WKBranch *root) {
         WKTable *relations = wk_table(WKStr *, XITie *);
         for (size_t i = 0; i < root->lower->n; i++) {
-                WKBranch *it = wk_array_get(root->lower, i, WKBranch *);
-                XISyntax *a = wk_branch_get(it, XISyntax *);
-                if (a->type != XI_SNIPPET_WITH_NAME) continue;
-                init_tie(relations, it);
+                WKBranch *x_bra = wk_array_get(root->lower, i, WKBranch *);
+                XISyntax *x = wk_branch_get(x_bra, XISyntax *);
+                if (x->type != XI_SNIPPET_WITH_NAME) continue;
+                init_tie(relations, x_bra);
         }
         for (size_t i = 0; i < root->lower->n; i++) {
-                WKBranch *it = wk_array_get(root->lower, i, WKBranch *);
-                XISyntax *a = wk_branch_get(it, XISyntax *);
-                if (a->type != XI_SNIPPET_WITH_NAME) continue;
-                WKBranch *content = wk_array_get(it->lower, it->lower->n - 1, WKBranch *);
-                for (size_t j = 0; j < content->lower->n; j++) {
-                        WKBranch *o_it = wk_array_get(content->lower, j, WKBranch *);
-                        XISyntax *b = wk_branch_get(o_it, XISyntax *);
-                        if (b->type != XI_SNIPPET_REFERENCE) continue;
-                        create_relation(relations, it, b);
+                WKBranch *x_bra = wk_array_get(root->lower, i, WKBranch *);
+                XISyntax *x = wk_branch_get(x_bra, XISyntax *);
+                if (x->type != XI_SNIPPET_WITH_NAME) continue;
+                WKBranch *y_bra = wk_array_get(x_bra->lower, x_bra->lower->n - 1, WKBranch *);
+                for (size_t j = 0; j < y_bra->lower->n; j++) {
+                        WKBranch *z_bra = wk_array_get(y_bra->lower, j, WKBranch *);
+                        XISyntax *z = wk_branch_get(z_bra, XISyntax *);
+                        if (z->type != XI_SNIPPET_REFERENCE) continue;
+                        create_relation(relations, x_bra, z);
                 }
         }
         return relations;
 }
 @
 
-\subsection{销毁关系表}
-
-关系表不再使用时，可使用 \type{wk_table_free} 予以销毁，但需要事先为表中键值对的值部分注册释放函数：
-
-@ 为关系表注册 XITie 对象释放函数 #
-wk_free_bus_connect("XITie *", xi_tie_box_free);
-@
-
-\noindent 其中 \type{xi_tie_box_free} 的定义如下：
-
-@ XITie 对象的释放函数：xi_tie_free  #
-static void xi_tie_box_free(WKBox *tie_box) {
-        XITie *tie = wk_box_get(tie_box, XITie *);
-        wk_array_free(tie->spatial_order);
-        wk_array_free(tie->time_order);
-        wk_array_free(tie->emissions);
-        free(tie);
-        wk_box_free(tie_box);
-}
-@
-
-\subsection{小结}
-
-汇集有名片段关系表构造过程的相关代码：
-
-@ xi 的数据结构与辅助函数 # +
-# XITie 结构 @
-# 有名片段关系表构建过程所需的辅助函数 @
-# XITie 对象的释放函数：xi_tie_free @
-@
+\subsection{访问关系表}
 
 函数 \type{xi_print_relations} 用于输出有名片段关系表的构建结果，其定义为
 
@@ -1947,6 +1915,27 @@ static void xi_print_relations(WKTable *relations) {
 }
 @
 
+\subsection{销毁关系表}
+
+关系表不再使用时，可使用 \type{wk_table_free} 予以销毁，但需要事先为表中键值对的值部分注册释放函数：
+
+@ 为关系表注册 XITie 对象释放函数 #
+wk_free_bus_connect("XITie *", xi_tie_box_free);
+@
+
+\noindent 其中 \type{xi_tie_box_free} 的定义如下：
+
+@ XITie 对象的释放函数：xi_tie_free  #
+static void xi_tie_box_free(WKBox *tie_box) {
+        XITie *tie = wk_box_get(tie_box, XITie *);
+        wk_array_free(tie->spatial_order);
+        wk_array_free(tie->time_order);
+        wk_array_free(tie->emissions);
+        free(tie);
+        wk_box_free(tie_box);
+}
+@
+
 上述代码所用的辅助函数 \type{print_snippet_name}，其定义为
 
 @ xi_print_relations # ^+
@@ -1965,6 +1954,16 @@ static void print_snippet_name(WKBranch *x) {
 }
 @
 
+\subsection{小结}
+
+汇集有名片段关系表构造过程的相关代码：
+
+@ xi 的数据结构与辅助函数 # +
+# XITie 结构 @
+# 有名片段关系表构建过程所需的辅助函数 @
+# XITie 对象的释放函数：xi_tie_free @
+@
+
 \section{抽取}
 
 对于文学程序文件 \type{xi_file_path}，根据有名片段关系表 \type{relations}，以给定的入口 \type{entrance}——某个有名片段的名字，抽取片段所包含的所有内容——片段及其所引用的其他片段的内容。由于被某个片段引用的片段又可能引用其他片段，因此片段内容抽取过程是递归的，\type{xi_tangle} 实现了该过程。
@@ -1978,7 +1977,7 @@ static void xi_tangle(const char *xi_file_path,
                       WKList *indents, /* 用于记录所引用的片段的缩进层次 */
                       bool show_line_number, /* 用于控制输出的内容是否包含行号 */
                       WKStr *cache) {
-        WKStr *key = compact_text(entrance, xi_skipped_chars_in_snippet_name);
+        WKStr *key = compact_text(entrance, xi_skipped_chars_in_name);
         WKBox *tie_box = wk_table_query(relations, wk_box_ref(key, WKStr *));
         if (!tie_box) {
                 fprintf(stderr, "Snippet <%s> never existed!\n", entrance->body);
@@ -1987,29 +1986,32 @@ static void xi_tangle(const char *xi_file_path,
 	XITie *tie = wk_box_get(tie_box, XITie *);
         /* 获得入口片段的 id */
         if (here == 0) {
-                WKBranch *last_bra = wk_array_get(tie->spatial_order, tie->spatial_order->n - 1, WKBranch *);
+                WKBranch *last_bra = wk_array_get(tie->spatial_order,
+                                                  tie->spatial_order->n - 1,
+                                                  WKBranch *);
                 XISyntax *last = wk_branch_get(last_bra, XISyntax *);
                 here = last->id;
         }
         for (size_t i = 0; i < tie->time_order->n; i++) {
                 WKBranch *x_bra = wk_array_get(tie->time_order, i, WKBranch *);
                 XISyntax *x = wk_branch_get(x_bra, XISyntax *);
+                WKBranch *y_bra = wk_array_get(x_bra->lower, x_bra->lower->n - 1, WKBranch *);
                 WKStr *current_indent = cascade_indents(indents); /* 将各层次的缩进串联起来 */
                 if (i > 0) {
                         if (x->id > here) {
                                 wk_str_free(current_indent);
                                 continue; /* 同名片段，会被 here 截断 */
                         }
-                        wk_str_suffix(cache, "\n");  /* 同名片段，从第 2 个开始，头部增加换行 */
-                        wk_str_suffix(cache, current_indent->body);  /* 同名片段首行缩进 */
+                        /* 同名片段，从第 2 个开始，头部增加换行和缩进 */
+                        wk_str_suffix(cache, "\n");
+                        wk_str_suffix(cache, current_indent->body);
                 }
-                WKBranch *x_body_bra = wk_array_get(x_bra->lower, x_bra->lower->n - 1, WKBranch *);
-                size_t last_pos = x_body_bra->lower->n - 1;
-		for (size_t j = 0; j < x_body_bra->lower->n; j++) {
-			WKBranch *a_bra = wk_array_get(x_body_bra->lower, j, WKBranch *);
-                        XISyntax *a = wk_branch_get(a_bra, XISyntax *);
-                        XIToken *a_tok = wk_link_get(a->tokens->head, XIToken *);
-                        if (a->type == XI_SNIPPET_REFERENCE) {
+                size_t last_pos = y_bra->lower->n - 1;
+		for (size_t j = 0; j < y_bra->lower->n; j++) {
+			WKBranch *z_bra = wk_array_get(y_bra->lower, j, WKBranch *);
+                        XISyntax *z = wk_branch_get(z_bra, XISyntax *);
+                        XIToken *z_tok = wk_link_get(z->tokens->head, XIToken *);
+                        if (z->type == XI_SNIPPET_REFERENCE) {
                                 # 输出引用的片段内容 @
                         } else {
                                 # 输出片段内普通文本 @
@@ -2021,25 +2023,28 @@ static void xi_tangle(const char *xi_file_path,
 }
 @
 
+\type{cascade_indents} 用于串联各层次缩进，
+
+@ 有名片段内容抽取过程所需的辅助函数 # ^+
+static WKStr *cascade_indents(WKList *indents) {
+        WKStr *current_indent = wk_str(NULL);
+        for (WKLink *it = indents->head; it; it = it->next) {
+                WKStr *a = wk_link_get(it, WKStr *);
+                wk_str_suffix(current_indent, a->body);
+        }
+        return current_indent;
+}
+@
+
 向文件写入片段内容时，构造一个缓冲区，收集待写入的内容，然后将其一次性写入文件。需要注意的是，有名片段的首尾通常各存在一个空行，它们的作用是在视觉上让有名片段的内容更加明显突出，在抽取片段内容时，需要将其忽略。另外，在收集内容之前，由于片段可能是被其他片段引用，在被引用处可能存在缩进，故而需要构造缩进文本，将其添加到片段内容的每一行的行首，从而形成整个片段的缩进，该过程对于含有诸如 Python、YAML 之类代码的片段是必须的。向文件写入片段内容的过程具体如下：
 
 @ 输出片段内普通文本 #
-WKStr *text = a_tok->content;
-if (show_line_number) {
-        size_t line = first_token_line_number(a_bra);
-        const char *p = text->body;
-        p = xi_skip(text->body, text->body + text->n, p, 1, xi_skipped_chars);
-        if (*p == '\n') {
-                line++;
-        }
-        WKStr *line_number = wk_str(NULL);
-        wk_str_printf(line_number, "#line %lu \"%s\"\n", line, xi_file_path);
-        wk_str_suffix(cache, line_number->body);
-        wk_str_free(line_number);
-
-}
+WKStr *text = z_tok->content;
 const char *head = text->body;
 const char *tail = text->body + text->n;
+if (show_line_number) {
+        # 输出行号 @
+}
 /* 首节点掐头 */
 if (j == 0) {
         head = xi_skip(head, tail, head, 1, xi_skipped_chars);
@@ -2062,17 +2067,32 @@ if (head < tail) {
 }
 @
 
-串联各层次缩进的函数 \type{cascade_indents} 的定义如下：
+在每处普通文本首行之前，以 \type{#line 行号 "文件名"} 格式显示行号，且行号需要插入到 \type{cache} 最后一行的行首，
 
-@ 有名片段内容抽取过程所需的辅助函数 # ^+
-static WKStr *cascade_indents(WKList *indents) {
-        WKStr *current_indent = wk_str(NULL);
-        for (WKLink *it = indents->head; it; it = it->next) {
-                WKStr *a = wk_link_get(it, WKStr *);
-                wk_str_suffix(current_indent, a->body);
+@ 输出行号 #
+WKStr *cache_tail = wk_str(NULL);
+const char *p = cache->body + cache->n;
+p = xi_skip(cache->body, cache->body + cache->n, p, -1, xi_skipped_chars);
+if (p > cache->body) {
+        if (*(p - 1) == '\n') {
+                for (const char *q = p; *q != '\0'; q++) wk_str_suffix_char(cache_tail, *q);
+                wk_str_del(cache, cache->n - cache_tail->n, cache_tail->n);
         }
-        return current_indent;
 }
+WKStr *line_number_text = wk_str(NULL);
+size_t line_number = first_token_line_number(z_bra);
+p = text->body;
+p = xi_skip(text->body, text->body + text->n, p, 1, xi_skipped_chars);
+if (*p == '\n') { /* 片段去尾后，会导致行号文本不正常，需作特殊处理 ! */
+        line_number++;
+}
+/* 保证行号文本独处一行 */
+if (j == 0) wk_str_printf(line_number_text, "#line %lu \"%s\"\n", line_number, xi_file_path);
+else wk_str_printf(line_number_text, "\n#line %lu \"%s\"", line_number, xi_file_path);
+wk_str_suffix(cache, line_number_text->body);
+if (cache_tail->n > 0) wk_str_suffix(cache, cache_tail->body);
+wk_str_free(line_number_text);
+wk_str_free(cache_tail);
 @
 
 输出引用的片段内容，本质上是递归调用上述的片段内容的输出过程，但是需要为该过程构造正确的缩进层次，否则抽取的内容会出现缩进混乱的情况。引用的片段，其缩进即其前一个 \type{XI_SNIPPET_TEXT} 类型的节点最后一行空白文本，需提取该段文本，以添加到引用的片段内容除首行之外的每行行首，提取过程如下：
@@ -2100,15 +2120,15 @@ static WKStr *last_blank_line(XISyntax *a) {
 @ 输出引用的片段内容 #
 if (j > 0) {
         /* 获得缩进 */
-	WKBranch *prev = wk_array_get(x_body_bra->lower, j - 1, WKBranch *);
-        XISyntax *y = wk_branch_get(prev, XISyntax *);
-        WKStr *blank_line = last_blank_line(y);
+	WKBranch *z_prev_bra = wk_array_get(y_bra->lower, j - 1, WKBranch *);
+        XISyntax *z_prev = wk_branch_get(z_prev_bra, XISyntax *);
+        WKStr *blank_line = last_blank_line(z_prev);
         if (blank_line) {
                 wk_list_prefix(indents, blank_line, WKStr *);
         }
         /* 抽取代码 */
         xi_tangle(xi_file_path, syntax_tree, relations,
-                  a_tok->content, here, indents, show_line_number, cache);
+                  z_tok->content, here, indents, show_line_number, cache);
         /* 删除当前层次的缩进 */
         if (blank_line) {
                 wk_str_free(blank_line);
@@ -2172,7 +2192,6 @@ typedef struct {
         WKStr *snippet_appending_operator;
         WKStr *snippet_prepending_operator;
 } XIFmt;
-
 XIFmt *xi_fmt;
 @
 
@@ -2251,7 +2270,7 @@ free(xi_fmt);
 
 @ 语言标记传播过程所需的辅助函数 # [C]
 static void get_thread(WKTable *relations, WKStr *entrance, WKList *thread) {
-        WKStr *key = compact_text(entrance, xi_skipped_chars_in_snippet_name);
+        WKStr *key = compact_text(entrance, xi_skipped_chars_in_name);
         WKBox *tie_box = wk_table_query(relations, wk_box_ref(key, WKStr *));
         if (!tie_box) {
                 fprintf(stderr, "Snippet <%s> never existed!\n", entrance->body);
@@ -2259,15 +2278,15 @@ static void get_thread(WKTable *relations, WKStr *entrance, WKList *thread) {
         }
         XITie *tie = wk_box_get(tie_box, XITie *);
         for (size_t i = 0; i < tie->spatial_order->n; i++) {
-                WKBranch *t = wk_array_get(tie->spatial_order, i, WKBranch *);
-                WKBranch *x = wk_array_get(t->lower, t->lower->n - 1, WKBranch *);
-                wk_list_prefix(thread, t, WKBranch *);
-                for (size_t j = 0; j < x->lower->n; j++) {
-                        WKBranch *it = wk_array_get(x->lower, j, WKBranch *);
-                        XISyntax *a = wk_branch_get(it, XISyntax *);
-                        if (a->type == XI_SNIPPET_REFERENCE) {
-                                XIToken *ta = wk_link_get(a->tokens->head, XIToken *);
-                                get_thread(relations, ta->content, thread);
+                WKBranch *x_bra = wk_array_get(tie->spatial_order, i, WKBranch *);
+                WKBranch *y_bra = wk_array_get(x_bra->lower, x_bra->lower->n - 1, WKBranch *);
+                wk_list_prefix(thread, x_bra, WKBranch *);
+                for (size_t j = 0; j < y_bra->lower->n; j++) {
+                        WKBranch *z_bra = wk_array_get(y_bra->lower, j, WKBranch *);
+                        XISyntax *z = wk_branch_get(z_bra, XISyntax *);
+                        if (z->type == XI_SNIPPET_REFERENCE) {
+                                XIToken *z_tok = wk_link_get(z->tokens->head, XIToken *);
+                                get_thread(relations, z_tok->content, thread);
                         }
                 }
         }
@@ -2279,24 +2298,22 @@ static void get_thread(WKTable *relations, WKStr *entrance, WKList *thread) {
 
 @ 语言标记传播过程所需的辅助函数 # +
 static void spread_language_mark_in_thread(WKTree *xi_tree, WKList *thread) {
-        XIToken *language_token = NULL;
+        XIToken *x_lang_tok = NULL;
         for (WKLink *it = thread->head; it; it = it->next) {
-                WKBranch *x = wk_link_get(it, WKBranch *);
-                language_token = find_language_token(x);
-                if (language_token) break;
+                WKBranch *x_bra = wk_link_get(it, WKBranch *);
+                x_lang_tok = find_language_token(x_bra);
+                if (x_lang_tok) break;
         }
-        if (!language_token) return;
+        if (!x_lang_tok) return;
         for (WKLink *it = thread->head; it; it = it->next) {
-                WKBranch *x = wk_link_get(it, WKBranch *);
-                /* 检测 x 是否含有语言标记 */
-                XIToken *language_token_a = find_language_token(x);
-                if (language_token_a) {
-                        if (strcmp(language_token->content->body,
-                                   language_token_a->content->body) != 0) {
+                WKBranch *x_bra = wk_link_get(it, WKBranch *);
+                /* 检测 x_bra 是否含有语言标记 */
+                XIToken *lang_tok = find_language_token(x_bra);
+                if (lang_tok) {
+                        if (strcmp(x_lang_tok->content->body, lang_tok->content->body) != 0) {
                                 fprintf(stderr, "Line %lu and %lu: "
                                                 "there are two different language marks.\n",
-                                                language_token->line_number,
-                                                language_token_a->line_number);
+                                                x_lang_tok->line_number, lang_tok->line_number);
                         }
                 } else {
                         # 构造语言标记节点 @
@@ -2325,25 +2342,25 @@ static XIToken *find_language_token(WKBranch *x) {
 对于不存在语言标记的有名片段，为其构造语言标记节点的过程如下：
 
 @ 构造语言标记节点 #
-XIToken *new_language_token = malloc(sizeof(XIToken));
-new_language_token->type = XI_TEXT;
-new_language_token->content = wk_str(language_token->content->body);
+XIToken *new_lang_tok = malloc(sizeof(XIToken));
+new_lang_tok->type = XI_TEXT;
+new_lang_tok->content = wk_str(x_lang_tok->content->body);
 /* 确定语言标记的行号 */
-XISyntax *name = wk_branch_get(wk_array_get(x->lower, 0, WKBranch *), XISyntax *);
-XIToken *name_token = wk_link_get(name->tokens->head, XIToken *);
-size_t line_number = name_token->line_number;
-for (char *p = name_token->content->body; *p != '\0'; p++) {
+XISyntax *name = wk_branch_get(wk_array_get(x_bra->lower, 0, WKBranch *), XISyntax *);
+XIToken *name_tok = wk_link_get(name->tokens->head, XIToken *);
+size_t line_number = name_tok->line_number;
+for (const char *p = name_tok->content->body; *p != '\0'; p++) {
         if (*p == '\n') line_number++;
 }
-new_language_token->line_number = line_number;
+new_lang_tok->line_number = line_number;
 /* 将语言标记添加到语法树 */
-XISyntax *new_language = malloc(sizeof(XISyntax));
-new_language->type = XI_SNIPPET_LANGUAGE;
-new_language->tokens = wk_list(XIToken *);
-new_language->id = 0;
-wk_list_suffix(new_language->tokens, new_language_token, XIToken *);
+XISyntax *new_lang = malloc(sizeof(XISyntax));
+new_lang->type = XI_SNIPPET_LANGUAGE;
+new_lang->tokens = wk_list(XIToken *);
+wk_list_suffix(new_lang->tokens, new_lang_tok, XIToken *);
+new_lang->id = 0;
 /* 新节点会作为 x 的第 2 个节点 */
-wk_tree_ins(xi_tree, x, 1, new_language, XISyntax *);
+wk_tree_ins(xi_tree, x_bra, 1, new_lang, XISyntax *);
 @
 
 在语法树中所有的有名节点中传播语言标记的过程由辅助函数 \type{spread_language_mark} 实现：
@@ -2351,16 +2368,15 @@ wk_tree_ins(xi_tree, x, 1, new_language, XISyntax *);
 @ 语言标记传播过程所需的辅助函数 # +
 static void spread_language_mark(WKTree *xi_tree, WKTable *relations) {
         for (size_t i = 0; i < xi_tree->root->lower->n; i++) {
-                WKBranch *it = wk_array_get(xi_tree->root->lower, i, WKBranch *);
-                XISyntax *a = wk_branch_get(it, XISyntax *);
-                if (a->type == XI_SNIPPET_WITH_NAME) {
-                        XISyntax *b = wk_branch_get(wk_array_get(it->lower,
+                WKBranch *x_bra = wk_array_get(xi_tree->root->lower, i, WKBranch *);
+                XISyntax *x = wk_branch_get(x_bra, XISyntax *);
+                if (x->type == XI_SNIPPET_WITH_NAME) {
+                        XISyntax *y = wk_branch_get(wk_array_get(x_bra->lower,
                                                                  0,
-                                                                 WKBranch *),
-                                                    XISyntax *);
-                        XIToken *tb = wk_link_get(b->tokens->head, XIToken *);
+                                                                 WKBranch *), XISyntax *);
+                        XIToken *y_tok = wk_link_get(y->tokens->head, XIToken *);
                         WKList *thread = wk_list(WKBranch *);
-                        get_thread(relations, tb->content, thread);
+                        get_thread(relations, y_tok->content, thread);
                         spread_language_mark_in_thread(xi_tree, thread);
                         wk_list_free(thread);
                 }
@@ -2375,13 +2391,13 @@ static void spread_language_mark(WKTree *xi_tree, WKTable *relations) {
 @ xi_weave # [C]
 static void xi_weave(WKTree *xi_tree, WKTable *relations, FILE *output) {
         for (size_t i = 0; i < xi_tree->root->lower->n; i++) {
-                WKBranch *x = wk_array_get(xi_tree->root->lower, i, WKBranch *);
-                XISyntax *x_syntax = wk_branch_get(x, XISyntax *);
-                if (x_syntax->type == XI_SNIPPET) { /* 无名片段，原样输出 */
-                        XIToken *x_token = wk_link_get(x_syntax->tokens->head, XIToken *);
-                        fprintf(output, "%s", x_token->content->body);
+                WKBranch *x_bra = wk_array_get(xi_tree->root->lower, i, WKBranch *);
+                XISyntax *x = wk_branch_get(x_bra, XISyntax *);
+                if (x->type == XI_SNIPPET) { /* 无名片段，原样输出 */
+                        XIToken *x_tok = wk_link_get(x->tokens->head, XIToken *);
+                        fprintf(output, "%s", x_tok->content->body);
                 } else {
-                        output_snippet_with_name(xi_tree, x, relations, output);
+                        output_snippet_with_name(xi_tree, x_bra, relations, output);
                 }
         }
 }
@@ -2390,18 +2406,17 @@ static void xi_weave(WKTree *xi_tree, WKTable *relations, FILE *output) {
 \noindent 上述代码中用于输出有名片段内容的辅助函数 \type{output_snippet_with_name}，其实现如下：
 
 @ xi_weave # ^+
-static void output_snippet_with_name(WKTree *syntax_tree, WKBranch *x, WKTable *relations, FILE *output) {
-        XISyntax *x_syntax = wk_branch_get(x, XISyntax *);
+static void output_snippet_with_name(WKTree *syntax_tree, WKBranch *x_bra, WKTable *relations, FILE *output) {
+        XISyntax *x = wk_branch_get(x_bra, XISyntax *);
         WKStr *x_name = NULL;
-        WKStr *x_id = wk_str(NULL);
-        wk_str_printf(x_id, "%lu", x_syntax->id);
+        WKStr *x_id_text = wk_str(NULL);
+        wk_str_printf(x_id_text, "%lu", x->id);
         # 输出片段开始标记 @
-        for (size_t i = 0; i < x->lower->n; i++) {
-                WKBranch *y = wk_array_get(x->lower, i, WKBranch *);
-                XISyntax *y_syntax = wk_branch_get(y, XISyntax *);
-                XIToken *y_token = y_syntax->tokens ?
-                                   wk_link_get(y_syntax->tokens->head, XIToken *) : NULL;
-                switch (y_syntax->type) {
+        for (size_t i = 0; i < x_bra->lower->n; i++) {
+                WKBranch *y_bra = wk_array_get(x_bra->lower, i, WKBranch *);
+                XISyntax *y = wk_branch_get(y_bra, XISyntax *);
+                XIToken *y_tok = y->tokens ? wk_link_get(y->tokens->head, XIToken *) : NULL;
+                switch (y->type) {
                 case XI_SNIPPET_NAME:
                         # 输出片段名 @
                         break;
@@ -2425,7 +2440,7 @@ static void output_snippet_with_name(WKTree *syntax_tree, WKBranch *x, WKTable *
         }
         # 输出片段的引用者 @
         # 输出片段结束标记 @
-        wk_str_free(x_id);
+        wk_str_free(x_id_text);
 }
 @
 
@@ -2433,10 +2448,10 @@ static void output_snippet_with_name(WKTree *syntax_tree, WKBranch *x, WKTable *
 
 @ 输出片段开始标记 #
 if (xi_fmt->snippet_start->n > 0) {
-        XIToken *language = find_language_token(x);
+        XIToken *x_lang_tok = find_language_token(x_bra);
         WKStr *a = wk_str(xi_fmt->snippet_start->body);
-        if (language) {
-                wk_str_replace(a, "${language}", language->content->body);
+        if (x_lang_tok) {
+                wk_str_replace(a, "${language}", x_lang_tok->content->body);
         }
         fprintf(output, "%s", a->body);
         wk_str_free(a);
@@ -2445,10 +2460,10 @@ if (xi_fmt->snippet_start->n > 0) {
 
 @ 输出片段结束标记 #
 if (xi_fmt->snippet_stop->n > 0) {
-        XIToken *language = find_language_token(x);
+        XIToken *x_lang_tok = find_language_token(x_bra);
         WKStr *a = wk_str(xi_fmt->snippet_stop->body);
-        if (language) {
-                wk_str_replace(a, "${language}", language->content->body);
+        if (x_lang_tok) {
+                wk_str_replace(a, "${language}", x_lang_tok->content->body);
         }
         fprintf(output, "%s", a->body);
         wk_str_free(a);
@@ -2458,7 +2473,7 @@ if (xi_fmt->snippet_stop->n > 0) {
 若用户提供了片段名标记，则将可能存在的占位符 \type{${name}} 和 \type{${id}} 替换为片段名及序号，否则只输出片段名以及片段名字界限符。片段名输出过程如下：
 
 @ 输出片段名 #
-x_name = y_token->content; /* 保存片段名，留待输出片段引用者时用 */
+x_name = y_tok->content; /* 保存片段名，留待输出片段引用者时用 */
 if (xi_fmt->snippet_name->n > 0) {
         WKArray *segments = snippet_name_split(x_name);
         /* 输出片段定界符 */
@@ -2495,14 +2510,14 @@ if (xi_fmt->snippet_name->n > 0) {
         }
         if (xi_fmt->snippet_id->n > 0) {
                 WKStr *snippet_id = wk_str(xi_fmt->snippet_id->body);
-                wk_str_replace(snippet_id, "${id}", x_id->body);
+                wk_str_replace(snippet_id, "${id}", x_id_text->body);
                 fprintf(output, "%s", snippet_id->body);
                 wk_str_free(snippet_id);
         }
         wk_array_free(segments);
 } else fprintf(output, "%s%s%s",
                        xi_symbols->snippet_delimiter->body,
-                       y_token->content->body,
+                       y_tok->content->body,
                        xi_symbols->snippet_name_delimiter->body);
 @
 
@@ -2579,14 +2594,14 @@ WKArray *snippet_name_split(WKStr *name) {
 @ 输出片段标签引用 #
 if (xi_fmt->snippet_tag_reference->n > 0) {
         WKStr *a = wk_str(xi_fmt->snippet_tag_reference->body);
-        wk_str_replace(a, "${id}", x_id->body);
-        wk_str_replace(a, "${name}", y_token->content->body);
+        wk_str_replace(a, "${id}", x_id_text->body);
+        wk_str_replace(a, "${name}", y_tok->content->body);
         fprintf(output, "%s", a->body);
         wk_str_free(a);
 } else {
         fprintf(output, " %s%s%s",
                         xi_symbols->tag_start_mark->body,
-                        y_token->content->body,
+                        y_tok->content->body,
                         xi_symbols->tag_stop_mark->body);
 }
 @
@@ -2609,17 +2624,17 @@ if (xi_fmt->snippet_prepending_operator->n > 0) {
 
 @ 输出片段标签 #
 do {
-        XIToken *tag_token = wk_link_get(y_syntax->tokens->head, XIToken *);
+        XIToken *tag_tok = wk_link_get(y->tokens->head, XIToken *);
         if (xi_fmt->snippet_tag->n > 0) {
                 WKStr *a = wk_str(xi_fmt->snippet_tag->body);
-                wk_str_replace(a, "${id}", x_id->body);
-                wk_str_replace(a, "${name}", tag_token->content->body);
+                wk_str_replace(a, "${id}", x_id_text->body);
+                wk_str_replace(a, "${name}", tag_tok->content->body);
                 fprintf(output, "%s", a->body);
                 wk_str_free(a);
         } else {
                 fprintf(output, "\n%s%s%s",
                                 xi_symbols->tag_start_mark->body,
-                                tag_token->content->body,
+                                tag_tok->content->body,
                                 xi_symbols->tag_stop_mark->body);
         }
 } while (0);
@@ -2628,21 +2643,21 @@ do {
 片段的内容是在 \type{x} 的下层节点里，且只有两种类型 \type{XI_TEXT} 与 \type{XI_SNIPPET_REFERENCE}，其输出过程如下：
 
 @ 输出片段内容 #
-for (size_t j = 0; j < y->lower->n; j++) {
-        WKBranch *z = wk_array_get(y->lower, j, WKBranch *);
-        XISyntax *z_syntax = wk_branch_get(z, XISyntax *);
-        XIToken *z_token = wk_link_get(z_syntax->tokens->head, XIToken *);
-        if (z_syntax->type == XI_SNIPPET_TEXT) {
-                fprintf(output, "%s", z_token->content->body);
+for (size_t j = 0; j < y_bra->lower->n; j++) {
+        WKBranch *z_bra = wk_array_get(y_bra->lower, j, WKBranch *);
+        XISyntax *z = wk_branch_get(z_bra, XISyntax *);
+        XIToken *z_tok = wk_link_get(z->tokens->head, XIToken *);
+        if (z->type == XI_SNIPPET_TEXT) {
+                fprintf(output, "%s", z_tok->content->body);
         } else {
-                WKStr *key = compact_text(z_token->content, xi_skipped_chars_in_snippet_name);
+                WKStr *key = compact_text(z_tok->content, xi_skipped_chars_in_name);
                 WKBox *tie_box = wk_table_query(relations, wk_box_ref(key, WKStr *));
                 wk_str_free(key);
                 if (tie_box) {
                         # 输出片段引用 @
                 } else {
                         fprintf(stderr, "Line %lu: the snippet <%s> not defined!\n",
-                                        z_token->line_number, z_token->content->body);
+                                        z_tok->line_number, z_tok->content->body);
                 }
         }
 }
@@ -2653,7 +2668,7 @@ for (size_t j = 0; j < y->lower->n; j++) {
 @ 输出片段引用 #
 XITie *tie = wk_box_get(tie_box, XITie *);
 if (xi_fmt->snippet_reference->n > 0) {
-        WKArray *segments = snippet_name_split(z_token->content);
+        WKArray *segments = snippet_name_split(z_tok->content);
         if (xi_fmt->snippet_reference_start->n > 0) {
                 fprintf(output, "%s", xi_fmt->snippet_reference_start->body);
         } else {
@@ -2686,9 +2701,9 @@ if (xi_fmt->snippet_reference->n > 0) {
         }
         /* 输出片段 id 序列：同名片段，只输出首个 id */
         WKStr *z_id_text = wk_str(NULL);
-        WKBranch *z_bra = wk_array_get(tie->spatial_order, 0, WKBranch *);
-        XISyntax *z = wk_branch_get(z_bra, XISyntax *);
-        wk_str_printf(z_id_text, "%lu", z->id);
+        WKBranch *a_bra = wk_array_get(tie->spatial_order, 0, WKBranch *);
+        XISyntax *a = wk_branch_get(a_bra, XISyntax *);
+        wk_str_printf(z_id_text, "%lu", a->id);
         if (xi_fmt->snippet_reference_id->n > 0) {
                 WKStr *z_id_fmt = wk_str(xi_fmt->snippet_reference_id->body);
                 wk_str_replace(z_id_fmt, "${id}", z_id_text->body);
@@ -2699,7 +2714,7 @@ if (xi_fmt->snippet_reference->n > 0) {
 } else {
         fprintf(output, "%s%s%s",
                          xi_symbols->snippet_reference_start_mark->body,
-                         z_token->content->body,
+                         z_tok->content->body,
                          xi_symbols->snippet_reference_stop_mark->body);
 }
 @
@@ -2708,29 +2723,27 @@ if (xi_fmt->snippet_reference->n > 0) {
 
 @ 输出片段的引用者 #
 if (xi_fmt->snippet_emission->n > 0) {
-        WKStr *x_key = compact_text(x_name, xi_skipped_chars_in_snippet_name);
+        WKStr *x_key = compact_text(x_name, xi_skipped_chars_in_name);
         WKBox *tie_box = wk_table_query(relations, wk_box_ref(x_key, WKStr *));
         if (tie_box) {
                 XITie *tie = wk_box_get(tie_box, XITie *);
                 if (tie->emissions->n > 0
-                    && x == wk_array_get(tie->spatial_order, 0, WKBranch *)) {
-                        WKStr *e_id = wk_str(NULL);
+                    && x_bra == wk_array_get(tie->spatial_order, 0, WKBranch *)) {
+                        WKStr *y_id_text = wk_str(NULL);
                         for (size_t i = 0; i < tie->emissions->n; i++) {
-                                WKBranch *e = wk_array_get(tie->emissions, i, WKBranch *);
-                                XISyntax *e_syntax = wk_branch_get(e, XISyntax *);
-                                WKBranch *e_name_branch = wk_array_get(e->lower, 0, WKBranch *);
-                                XISyntax *e_name = wk_branch_get(e_name_branch, XISyntax *);
-                                XIToken *e_name_token = wk_link_get(e_name->tokens->head, XIToken *);
-                                wk_str_printf(e_id, "%lu", e_syntax->id);
-                                WKStr *e_fmt = wk_str(xi_fmt->snippet_emission->body);
-                                wk_str_replace(e_fmt,
-                                               "${name}",
-                                               e_name_token->content->body);
-                                wk_str_replace(e_fmt, "${id}", e_id->body);
-                                fprintf(output, "%s", e_fmt->body);
-                                wk_str_free(e_fmt);
+                                WKBranch *y_bra = wk_array_get(tie->emissions, i, WKBranch *);
+                                XISyntax *y = wk_branch_get(y_bra, XISyntax *);
+                                WKBranch *y_name_bra = wk_array_get(y_bra->lower, 0, WKBranch *);
+                                XISyntax *y_name = wk_branch_get(y_name_bra, XISyntax *);
+                                XIToken *y_name_tok = wk_link_get(y_name->tokens->head, XIToken *);
+                                wk_str_printf(y_id_text, "%lu", y->id);
+                                WKStr *y_fmt = wk_str(xi_fmt->snippet_emission->body);
+                                wk_str_replace(y_fmt, "${name}", y_name_tok->content->body);
+                                wk_str_replace(y_fmt, "${id}", y_id_text->body);
+                                fprintf(output, "%s", y_fmt->body);
+                                wk_str_free(y_fmt);
                         }
-                        wk_str_free(e_id);
+                        wk_str_free(y_id_text);
                 }
         }
         wk_str_free(x_key);
@@ -2789,17 +2802,17 @@ static void xi_yaml_output(WKTree *xi_tree,
                            XIFmt *fmt,
                            FILE *output) {
         for (size_t i = 0; i < xi_tree->root->lower->n; i++) {
-                WKBranch *x = wk_array_get(xi_tree->root->lower, i, WKBranch *);
-                XISyntax *x_syntax = wk_branch_get(x, XISyntax *);
-                if (x_syntax->type == XI_SNIPPET) { /* 无名片段，原样输出 */
-                        XIToken *x_token = wk_link_get(x_syntax->tokens->head, XIToken *);
+                WKBranch *x_bra = wk_array_get(xi_tree->root->lower, i, WKBranch *);
+                XISyntax *x = wk_branch_get(x_bra, XISyntax *);
+                if (x->type == XI_SNIPPET) { /* 无名片段，原样输出 */
+                        XIToken *x_tok = wk_link_get(x->tokens->head, XIToken *);
                         fprintf(output, "- type: no-name\n"
                                         "  content: |-\n"
                                         "    '");
-                        yaml_output_multilines(output, x_token->content->body, "    ");
+                        yaml_output_multilines(output, x_tok->content->body, "    ");
                         fprintf(output, "'\n");
                 } else {
-                        snippet_with_name_to_yaml(xi_tree, x, relations, fmt, output);
+                        snippet_with_name_to_yaml(xi_tree, x_bra, relations, fmt, output);
                 }
         }
 }
@@ -2828,42 +2841,41 @@ static void yaml_output_multilines(FILE *output, const char *text, const char *i
 
 @ xi_yaml_output # <yaml-output-multilines> +
 static void snippet_with_name_to_yaml(WKTree *syntax_tree,
-                                      WKBranch *x,
+                                      WKBranch *x_bra,
                                       WKTable *relations,
                                       XIFmt *fmt,
                                       FILE *output) {
-        XISyntax *x_syntax = wk_branch_get(x, XISyntax *);
+        XISyntax *x = wk_branch_get(x_bra, XISyntax *);
         WKStr *x_name = NULL;
-        WKStr *x_id = wk_str(NULL);
+        WKStr *x_id_text = wk_str(NULL);
         fprintf(output, "- type: with-name\n");
-        for (size_t i = 0; i < x->lower->n; i++) {
-                WKBranch *y = wk_array_get(x->lower, i, WKBranch *);
-                XISyntax *y_syntax = wk_branch_get(y, XISyntax *);
-                XIToken *y_token = y_syntax->tokens ?
-                                   wk_link_get(y_syntax->tokens->head, XIToken *) : NULL;
-                switch (y_syntax->type) {
+        for (size_t i = 0; i < x_bra->lower->n; i++) {
+                WKBranch *y_bra = wk_array_get(x_bra->lower, i, WKBranch *);
+                XISyntax *y = wk_branch_get(y_bra, XISyntax *);
+                XIToken *y_tok = y->tokens ? wk_link_get(y->tokens->head, XIToken *) : NULL;
+                switch (y->type) {
                 case XI_SNIPPET_NAME:
-                        x_name = y_token->content;
+                        x_name = y_tok->content;
                         fprintf(output, "  name: |-\n"
                                         "    '");
                         yaml_output_multilines(output, x_name->body, "    ");
                         fprintf(output, "'\n"
-                                        "  id: %lu\n", x_syntax->id);
+                                        "  id: %lu\n", x->id);
                         break;
                 case XI_SNIPPET_LANGUAGE:
-                        fprintf(output, "  language: %s\n", y_token->content->body);
+                        fprintf(output, "  language: %s\n", y_tok->content->body);
                         break;
                 case XI_SNIPPET_TAG_REFERENCE:
-                        fprintf(output, "  tag_reference: '%s'\n", y_token->content->body);
+                        fprintf(output, "  tag_reference: '%s'\n", y_tok->content->body);
                         break;
                 case XI_SNIPPET_APPENDING_OPERATOR:
-                        fprintf(output, "  operator: %s\n", y_token->content->body);
+                        fprintf(output, "  operator: %s\n", y_tok->content->body);
                         break;
                 case XI_SNIPPET_PREPENDING_OPERATOR:
-                        fprintf(output, "  operator: %s\n", y_token->content->body);
+                        fprintf(output, "  operator: %s\n", y_tok->content->body);
                         break;
                 case XI_SNIPPET_TAG:
-                        fprintf(output, "  tag: '%s'\n", y_token->content->body);
+                        fprintf(output, "  tag: '%s'\n", y_tok->content->body);
                         break;
                 case XI_SNIPPET_CONTENT:
                         # YAML 格式化：片段内容 @
@@ -2872,7 +2884,7 @@ static void snippet_with_name_to_yaml(WKTree *syntax_tree,
                 }
         }
         # YAML 格式化：片段的引用者 @
-        wk_str_free(x_id);
+        wk_str_free(x_id_text);
 }
 @
 
@@ -2880,18 +2892,18 @@ static void snippet_with_name_to_yaml(WKTree *syntax_tree,
 
 @ YAML 格式化：片段内容 #
 fprintf(output, "  content:\n");
-for (size_t j = 0; j < y->lower->n; j++) {
-        WKBranch *z = wk_array_get(y->lower, j, WKBranch *);
-        XISyntax *z_syntax = wk_branch_get(z, XISyntax *);
-        XIToken *z_tok = wk_link_get(z_syntax->tokens->head, XIToken *);
-        if (z_syntax->type == XI_SNIPPET_TEXT) {
+for (size_t j = 0; j < y_bra->lower->n; j++) {
+        WKBranch *z_bra = wk_array_get(y_bra->lower, j, WKBranch *);
+        XISyntax *z = wk_branch_get(z_bra, XISyntax *);
+        XIToken *z_tok = wk_link_get(z->tokens->head, XIToken *);
+        if (z->type == XI_SNIPPET_TEXT) {
                 fprintf(output, "    - type: text\n"
                                 "      data: |-\n"
                                 "        '");
                 yaml_output_multilines(output, z_tok->content->body, "        ");
                 fprintf(output, "'\n");
-        } else if (z_syntax->type == XI_SNIPPET_REFERENCE) {
-                WKStr *key = compact_text(z_tok->content, xi_skipped_chars_in_snippet_name);
+        } else if (z->type == XI_SNIPPET_REFERENCE) {
+                WKStr *key = compact_text(z_tok->content, xi_skipped_chars_in_name);
                 WKBox *tie_box = wk_table_query(relations, wk_box_ref(key, WKStr *));
                 fprintf(output, "    - type: snippet-reference\n");
                 if (tie_box) {
@@ -2903,9 +2915,9 @@ for (size_t j = 0; j < y->lower->n; j++) {
                                         "      ids:\n");
                         /* 输出所引用的片段 id */
                         for (size_t k = 0; k < tie->spatial_order->n; k++) {
-                                WKBranch *z_ref = wk_array_get(tie->spatial_order, k, WKBranch *);
-                                XISyntax *z_ref_syntax = wk_branch_get(z_ref, XISyntax *);
-                                fprintf(output, "        - %lu\n", z_ref_syntax->id);
+                                WKBranch *z_ref_bra = wk_array_get(tie->spatial_order, k, WKBranch *);
+                                XISyntax *z_ref = wk_branch_get(z_ref_bra, XISyntax *);
+                                fprintf(output, "        - %lu\n", z_ref->id);
                         }
                 } else {
                         fprintf(stderr, "Line %lu: the snippet <%s> not defined!\n",
@@ -2920,22 +2932,22 @@ for (size_t j = 0; j < y->lower->n; j++) {
 上述辅助函数 \type{snippet_with_name_to_yaml} 中的片段引用者集合的格式化过程如下：
 
 @ YAML 格式化：片段的引用者 #
-WKStr *x_key = compact_text(x_name, xi_skipped_chars_in_snippet_name);
+WKStr *x_key = compact_text(x_name, xi_skipped_chars_in_name);
 WKBox *tie_box = wk_table_query(relations, wk_box_ref(x_key, WKStr *));
 if (tie_box) {
         XITie *tie = wk_box_get(tie_box, XITie *);
         if (tie->emissions->n > 0
-            && x == wk_array_get(tie->spatial_order, 0, WKBranch *)) {
+            && x_bra == wk_array_get(tie->spatial_order, 0, WKBranch *)) {
                 fprintf(output, "  emissions:\n");
                 for (size_t i = 0; i < tie->emissions->n; i++) {
-                        WKBranch *e = wk_array_get(tie->emissions, i, WKBranch *);
-                        XISyntax *e_syntax = wk_branch_get(e, XISyntax *);
-                        WKBranch *e_name_branch = wk_array_get(e->lower, 0, WKBranch *);
-                        XISyntax *e_name_syntax = wk_branch_get(e_name_branch, XISyntax *);
-                        XIToken *e_name_token = wk_link_get(e_name_syntax->tokens->head, XIToken *);
+                        WKBranch *y_bra = wk_array_get(tie->emissions, i, WKBranch *);
+                        XISyntax *y = wk_branch_get(y_bra, XISyntax *);
+                        WKBranch *y_name_bra = wk_array_get(y_bra->lower, 0, WKBranch *);
+                        XISyntax *y_name = wk_branch_get(y_name_bra, XISyntax *);
+                        XIToken *y_name_tok = wk_link_get(y_name->tokens->head, XIToken *);
                         fprintf(output, "    - name: |-\n"
                                         "        '%s'\n"
-                                        "      id: %lu\n", e_name_token->content->body, e_syntax->id);
+                                        "      id: %lu\n", y_name_tok->content->body, y->id);
                 }
         }
 }
@@ -3099,7 +3111,7 @@ WKArray *str_split(const char *str, const char *sep) {
 # 打开文学程序文件 -> xi_file @
 WKList *xi_tokens = xi_lexer(xi_file);
 WKTree *xi_tree = xi_parser(xi_tokens);
-# 构造冗白字符集 xi_skipped_chars_in_snippet_name @
+# 构造冗白字符集 xi_skipped_chars_in_name @
 # 为关系表注册 XITie 对象释放函数 @
 WKTable *relations = xi_create_relations(xi_tree->root);
 @
@@ -3108,7 +3120,7 @@ WKTable *relations = xi_create_relations(xi_tree->root);
 
 @ xi 进程资源回收 # +
 wk_table_free(relations);
-delete_syntax_tree(xi_tree);
+xi_delete_syntax_tree(xi_tree);
 @
 
 若 \type{--tangle} 模式开启，则调用 \type{xi_tangle} 抽取 \type{entrances} 中给定的代码片段，并输出到 \type{outputs} 中相应下标对应的输出端。
