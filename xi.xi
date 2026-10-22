@@ -13,16 +13,14 @@
 
 一个程序，其源码可以拆解为一组片段，这些片段如同一张又一张设计图，跟随作者的思路，分散在文字构成的情节之中。这种编程方式便是文学编程，由 Donald Knuth 于 20 世纪 80 年代提出。
 
-文学程序通常是某种排版语言和编程语言的混合体。Knuth 以他发明的 \TEX\ 语言编写文档，以 Pascal 语言编写程序源码片段，且 \TEX\ 排版系统本身便是由这种方式实现的。Knuth 将生成可以排版印刷的程序文档的过程称为编织（Weave），将提取程序源码的过程称为抽取（Tangle），这两个过程所用的程序分别是 weave 和 tangle，二者合称 WEB，而它们本身也是以文学编程的方式实现的。
+文学程序通常是某种排版语言和编程语言的混合体。Knuth 以他发明的 \TEX\ 语言编写文档，以 Pascal 语言编写程序源码片段，且 \TEX\ 排版系统本身便是由这种方式实现的。Knuth 将生成可以排版印刷的程序文档的过程称为编织（Weave），将提取程序源码的过程称为抽取（Tangle），这两个过程所用的程序分别是 weave 和 tangle，二者合称 WEB。
 
-WEB 也是 Knuth 开发 \TEX\ 排版系统的专用工具。Knuth 用这个词作为他的文学编程工具的名字，是因为他认为，一篇文章或一本书是以网状结构描述事物。例如小说，各种人物的关系构成便是一个网络。WEB 只支持基于 \TEX\ 排版语言和 Pascal 语言的文学编程。后来，Silvio Levy 主导设计了 CWEB，将文学编程的范式引入 C 语言世界。为了扩大排版和编程语言的支持范围，Norman Ramsey 设计并实现了新的文学编程工具 noweb。
+Knuth 用 WEB 这个名字的时候，世上还没有互联网。他之所以用这个名字，大概是因为一篇文章或一本书是以网状结构描述事物，例如小说，各种人物错综复杂的关系可构成网络。WEB 只支持 \TEX\ 排版语言和 Pascal 编程语言。后来，Knuth 与 Silvio Levy 合作开发的 CWEB，能够支持基于 \TEX\ 语言和 C 编程语言的文学编程。为了扩大排版语言和编程语言的支持范围，Norman Ramsey 写出了 noweb，默认能够支持 \TEX，\LATEX\ 和 HTML 等排版语言，而编程语言则不受限制。不过，若要 noweb 支持其他排版语言，需要编写相应的后端程序，对于一般用户而言并非易事。
 
-现在依然还活着的这些文学编程工具皆已颇为陈旧。WEB 和 CWEB 主要用于维护旧的 \TEX\ 系统。noweb 默认能够支持 \TEX，\LATEX 和 HTML 等排版语言，但若要支持其他排版语言，需要编写相应的后端程序，对于一般用户而言并非易事。
-
-2017 年，我写了一个简单的文学编程工具 orez。2024 年，该工具经过一次全面的重写，除了支持用户自定义文学编程标记之外，变化主要发生在文档方面。事实上，文学程序的修改空间是更大的，即使代码保持不变，文档的修改空间也近乎是无限的。正如物理学家薛定谔所言，我们的任务不是去发现一些别人还没有发现的东西，而是针对所有人都看见的东西做一些从未有过的思考。
+2017 年，我写了一个简单的文学编程工具 orez。该工具于 2024 年经过一次全面的重写，除了增加用户自定义文学编程标记的功能之外，变化主要发生在文档部分。事实上，即使代码完全不变，文学程序的修改空间也是无限的。如物理学家薛定谔所言，我们的任务不是去发现一些别人还没有发现的东西，而是针对所有人都看见的东西做一些从未有过的思考。对于代码的新的思考，总是可以将其记录在文学程序的文档部分。
 
 \useURL[libwk][https://github.com/liyanrui/wk]
-我的需求，orez 完全能满足，但它依赖 GLib 和 LibYAML 这两个大库的少量功能。今年，我穷得只剩下了时间，且不知何去何从，为了让自己不至于过于堕落，便先写了一个很小的 C 库，名曰 WK 库\footnote{\from[libwk]}，使之能完全覆盖 orez 的需求，用以取代 GLib 和 LibYAML。基于 WK 库，我重写了 orez 的文档和源码，并将其重新命名为 xi，在汉语里可对应「兮」，表示该工具简单到只是清淡的语气，它几乎不依赖任何东西。
+我的需求，orez 完全能满足，但它依赖 GLib 和 LibYAML 这两个大库的少量功能。今年，由于我穷得只剩下了时间，为了让自己不至于堕落，便先写了一个很小的 C 库，即 WK 库\footnote{\from[libwk]}，使之覆盖 orez 的需求，用以取代 GLib 和 LibYAML 库。然后我再度重写了 orez，并将其更名为 xi。此名在汉语里可对应「兮」，表示该工具简单到只是清淡的语气，它几乎不依赖任何东西。
 
 \section[xi-mark]{标记}
 
@@ -2488,6 +2486,7 @@ if (xi_fmt->snippet_name->n > 0) {
                 if (j % 2 == 0) {
                         WKStr *snippet_name_t = wk_str(xi_fmt->snippet_name->body);
                         wk_str_replace(snippet_name_t, "${name}", segment->body);
+                        wk_str_replace(snippet_name_t, "${id}", x_id_text->body);
                         fprintf(output, "%s", snippet_name_t->body);
                         wk_str_free(snippet_name_t);
                 } else { /* 输出续行符以及下一行的前导空白字符 */
@@ -2669,6 +2668,10 @@ for (size_t j = 0; j < y_bra->lower->n; j++) {
 XITie *tie = wk_box_get(tie_box, XITie *);
 if (xi_fmt->snippet_reference->n > 0) {
         WKArray *segments = snippet_name_split(z_tok->content);
+        WKStr *z_id_text = wk_str(NULL);
+        WKBranch *a_bra = wk_array_get(tie->spatial_order, 0, WKBranch *);
+        XISyntax *a = wk_branch_get(a_bra, XISyntax *);
+        wk_str_printf(z_id_text, "%lu", a->id);
         if (xi_fmt->snippet_reference_start->n > 0) {
                 fprintf(output, "%s", xi_fmt->snippet_reference_start->body);
         } else {
@@ -2679,6 +2682,7 @@ if (xi_fmt->snippet_reference->n > 0) {
                 if (k % 2 == 0) {
                         WKStr *snippet_name_t = wk_str(xi_fmt->snippet_reference->body);
                         wk_str_replace(snippet_name_t, "${name}", segment->body);
+                        wk_str_replace(snippet_name_t, "${id}", z_id_text->body);
                         fprintf(output, "%s", snippet_name_t->body);
                         wk_str_free(snippet_name_t);
                 } else { /* 输出续行符以及下一行的前导空白字符 */
@@ -2699,11 +2703,7 @@ if (xi_fmt->snippet_reference->n > 0) {
         } else {
                 fprintf(output, "%s", xi_symbols->snippet_reference_stop_mark->body);
         }
-        /* 输出片段 id 序列：同名片段，只输出首个 id */
-        WKStr *z_id_text = wk_str(NULL);
-        WKBranch *a_bra = wk_array_get(tie->spatial_order, 0, WKBranch *);
-        XISyntax *a = wk_branch_get(a_bra, XISyntax *);
-        wk_str_printf(z_id_text, "%lu", a->id);
+        /* 输出片段 id 序列，若是同名片段，只输出首个 id */
         if (xi_fmt->snippet_reference_id->n > 0) {
                 WKStr *z_id_fmt = wk_str(xi_fmt->snippet_reference_id->body);
                 wk_str_replace(z_id_fmt, "${id}", z_id_text->body);
@@ -3197,6 +3197,6 @@ int main(int argc, char **argv) {
 
 xi 程序本身是以它所支持的文学编程形式编写的。这个程序写得并不太好。我的本意是希望它能蕴含一些文学性，可是每当需要引出一些代码片段时，我会不由自主地陷入这样一种叙述方式，\type{xxxx 的实现如下……}。这不叫文学，这叫说明书吧……应该有更好的叙事方式，只是自古至今，没人去思考该如何去叙述一个程序。
 
-也许更好的叙事方式是，自然语言部分不应当总是陷入为程序语言服务的角色，而是以文学的方式描述程序片段的一些意象。程序片段本身则是意象的实体，甚至未必不能将一个程序写成小说。当然，这只是我的猜测，而我现在并无能力和足够的时间去做一些尝试了。
+也许更好的叙事方式是，自然语言部分不应当总是陷入为程序语言服务的角色，而是以文学的方式描述程序片段的一些意象，如此未必不能将一个程序写成小说。当然，这只是我的猜测，而我现在并无能力和足够的时间去做一些尝试了。
 
 \stoptext

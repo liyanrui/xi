@@ -1,18 +1,8 @@
-#line 3173 "xi.xi"
-#line 268 "xi.xi"
 #include <wk-cfg.h>
-#line 1209 "xi.xi"
 #include <wk-tree.h>
-#line 2985 "xi.xi"
 #include <wk-cli.h>
-#line 3174 "xi.xi"
-#line 404 "xi.xi"
 WKArray *xi_skipped_chars; /* xi 空白字符集 */
-#line 1677 "xi.xi"
 WKArray *xi_skipped_chars_in_name;
-#line 3175 "xi.xi"
-#line 1097 "xi.xi"
-#line 201 "xi.xi"
 typedef enum {
         XI_SNIPPET_DELIMITER, /* 文档或有名片段界限符 */
         XI_SNIPPET_NAME_DELIMITER, /* 片段名字界限符 */
@@ -26,13 +16,11 @@ typedef enum {
         XI_SNIPPET_REFERENCE_STOP_MARK, /* 有名片段引用终结符 */
         XI_TEXT /* 普通文本 */
 } XITokenType;
-#line 191 "xi.xi"
 typedef struct {
         XITokenType type;
         size_t line_number;
         WKStr *content;
 } XIToken;
-#line 221 "xi.xi"
 typedef struct {
         WKStr *snippet_delimiter;
         WKStr *snippet_name_delimiter;
@@ -47,7 +35,6 @@ typedef struct {
         WKStr *snippet_reference_stop_mark;
 } XISymbols;
 XISymbols *xi_symbols;
-#line 296 "xi.xi"
 #define XI_USER_CONFIG(user_config, xi_symbols, item) do { \
         WKBox *v = wk_table_query(user_config, wk_box_ref(#item, const char *)); \
 	if (v) { \
@@ -55,7 +42,6 @@ XISymbols *xi_symbols;
                 xi_symbols->item = wk_str(wk_box_get(v, WKStr *)->body); \
         } \
 } while (0)
-#line 2177 "xi.xi"
 typedef struct {
         WKStr *snippet_start;
         WKStr *snippet_stop;
@@ -75,8 +61,6 @@ typedef struct {
         WKStr *snippet_prepending_operator;
 } XIFmt;
 XIFmt *xi_fmt;
-#line 1098 "xi.xi"
-#line 543 "xi.xi"
 static bool here_is_me(const char *a, const char *b,
                        const char *here, int dir, WKStr *me) {
         size_t n = me->n;
@@ -85,7 +69,6 @@ static bool here_is_me(const char *a, const char *b,
         if (p + n > b) return false;
         return memcmp(me->body, p, n) == 0 ? true : false;
 }
-#line 379 "xi.xi"
 static const char *xi_skip(const char *a, const char *b,
                            const char *pos, int dir, WKArray *skipped_chars) {
         /* pos 不在 [a, b) 区间，其值不变 */
@@ -106,7 +89,6 @@ static const char *xi_skip(const char *a, const char *b,
         }
         return pos;
 }
-#line 346 "xi.xi"
 static int read_char(FILE *xi_file, WKStr *cache) {
         int c = fgetc(xi_file);
         if (c != EOF) {
@@ -114,7 +96,6 @@ static int read_char(FILE *xi_file, WKStr *cache) {
                 return c;
         } else return EOF;
 }
-#line 362 "xi.xi"
 static bool tail_is_snippet_delimiter(WKStr *cache) {
         WKStr *snippet_delimiter = xi_symbols->snippet_delimiter;
         if (snippet_delimiter->n > cache->n) return false;
@@ -127,11 +108,9 @@ static bool tail_is_snippet_delimiter(WKStr *cache) {
         p = xi_skip(a, b, p, -1, xi_skipped_chars);
         return (p == a || *(p - 1) == '\n') ? true : false;
 }
-#line 433 "xi.xi"
 static void add_snippet(WKList *tokens, WKStr *cache) {
         XIToken *snippet = malloc(sizeof(XIToken));
         snippet->type = XI_TEXT;
-#line 446 "xi.xi"
         size_t n;
         WKLink *tail = tokens->tail;
         if (tail) {
@@ -141,17 +120,14 @@ static void add_snippet(WKList *tokens, WKStr *cache) {
                         if (*p == '\n') n++;
                 }
         } else  n = 1;
-#line 437 "xi.xi"
         snippet->line_number = n;
         snippet->content = cache;
         wk_list_suffix(tokens, snippet, XIToken *);
 }
-#line 460 "xi.xi"
 static void add_snippet_delimiter(WKList *tokens) {
         WKStr *snippet_delimiter = xi_symbols->snippet_delimiter;
         XIToken *snippet = malloc(sizeof(XIToken));
         snippet->type = XI_SNIPPET_DELIMITER;
-#line 446 "xi.xi"
         size_t n;
         WKLink *tail = tokens->tail;
         if (tail) {
@@ -161,12 +137,10 @@ static void add_snippet_delimiter(WKList *tokens) {
                         if (*p == '\n') n++;
                 }
         } else  n = 1;
-#line 465 "xi.xi"
         snippet->line_number = n;
         snippet->content = wk_str(snippet_delimiter->body);
         wk_list_suffix(tokens, snippet, XIToken *);
 }
-#line 503 "xi.xi"
 static const char *find_name_delimiter(XIToken *t) {
         WKStr *name_delimiter = xi_symbols->snippet_name_delimiter;
         WKStr *continuation = xi_symbols->snippet_name_continuation;
@@ -202,7 +176,6 @@ static const char *find_name_delimiter(XIToken *t) {
         }
         return (state == SUCCESS) ? b : NULL;
 }
-#line 656 "xi.xi"
 static WKPair *find_block(WKStr *content, WKStr *start_mark, WKStr *stop_mark) {
         WKPair *result = NULL;
         const char *block_start = NULL;
@@ -254,7 +227,6 @@ static WKStr *get_block(WKStr *content, WKPair *block) {
         free(block);
         return result;
 }
-#line 625 "xi.xi"
 static WKStr *extract_block(XIToken *t, WKStr *start_mark, WKStr *stop_mark) {
         WKStr *result = NULL;
         WKPair *block = find_block(t->content, start_mark, stop_mark);
@@ -280,7 +252,6 @@ static WKStr *extract_block(XIToken *t, WKStr *start_mark, WKStr *stop_mark) {
         }
         return result;
 }
-#line 712 "xi.xi"
 static void add_block(WKList *tokens,
                       WKLink *x,
                       WKStr *block,
@@ -309,7 +280,6 @@ static void add_block(WKList *tokens,
         stop->content = wk_str(stop_mark->body);
         WK_LIST_INSF(tokens, x, &stop);
 }
-#line 799 "xi.xi"
 static WKStr *extract_operator(XIToken *t, WKStr *operator) {
         /* 构造字符串区间 [a, b) */
         const char *a = t->content->body;
@@ -340,7 +310,6 @@ static WKStr *extract_operator(XIToken *t, WKStr *operator) {
         }
         return result;
 }
-#line 834 "xi.xi"
 static void add_operator(WKList *tokens,
                          WKLink *x,
                          WKStr *operator,
@@ -352,7 +321,6 @@ static void add_operator(WKList *tokens,
         a->content = operator;
         WK_LIST_INSF(tokens, x, &a);
 }
-#line 945 "xi.xi"
 static WKPair *find_snippet_reference(WKStr *content)
 {
         WKStr *reference_start_mark = xi_symbols->snippet_reference_start_mark;
@@ -401,7 +369,6 @@ static WKPair *find_snippet_reference(WKStr *content)
                 return result;
         } else return NULL;
 }
-#line 998 "xi.xi"
 static void split_snippet(WKList *tokens, WKLink *x, WKPair *snippet_reference) {
         WKStr *ref_start_mark = xi_symbols->snippet_reference_start_mark;
         WKStr *ref_stop_mark = xi_symbols->snippet_reference_stop_mark;
@@ -456,8 +423,6 @@ static void split_snippet(WKList *tokens, WKLink *x, WKPair *snippet_reference) 
         wk_str_free(t->content);
         t->content = f;
 }
-#line 1099 "xi.xi"
-#line 1115 "xi.xi"
 static void delete_tokens(WKList *tokens) {
         for (WKLink *it = tokens->head; it; it = it->next) {
                 XIToken *t = wk_link_get(it, XIToken *);
@@ -466,15 +431,11 @@ static void delete_tokens(WKList *tokens) {
         }
         wk_list_free(tokens);
 }
-#line 1100 "xi.xi"
 static WKList *xi_lexer(FILE *xi_file) {
-#line 408 "xi.xi"
         xi_skipped_chars = wk_array(WKStr *);
         wk_array_add(xi_skipped_chars, wk_str(" "), WKStr *);
         wk_array_add(xi_skipped_chars, wk_str("\t"), WKStr *);
         wk_array_add(xi_skipped_chars, wk_str("　"), WKStr *);
-#line 1102 "xi.xi"
-#line 474 "xi.xi"
         WKList *xi_tokens = wk_list(XIToken *);
         WKStr *cache = wk_str(NULL);
         while (1) {
@@ -483,11 +444,9 @@ static WKList *xi_lexer(FILE *xi_file) {
                 else {
                         bool t = tail_is_snippet_delimiter(cache);
                         if (t) {
-#line 425 "xi.xi"
                                 size_t sni_del_length = xi_symbols->snippet_delimiter->n;
                                 size_t sni_del_begin = cache->n - sni_del_length;
                                 wk_str_del(cache, sni_del_begin, sni_del_length);
-#line 483 "xi.xi"
                                 add_snippet(xi_tokens, cache);
                                 add_snippet_delimiter(xi_tokens);
                                 cache = wk_str(NULL); /* 刷新 cache */
@@ -499,15 +458,12 @@ static WKList *xi_lexer(FILE *xi_file) {
                 /* 以片段界限符作为记号列表的结尾，便于在语法树的构造过程中析取片段内容 */
                 add_snippet_delimiter(xi_tokens);
         } else wk_str_free(cache);
-#line 1103 "xi.xi"
-#line 558 "xi.xi"
         WKLink *it = xi_tokens->head;
         while (it) {
                 XIToken *t = wk_link_get(it, XIToken *);
                 if (t->type == XI_TEXT) {
                         const char *p = find_name_delimiter(t);
                         if (p) {
-#line 592 "xi.xi"
                                 /* 构建片段名字记号 */
                                 XIToken *snippet_name = malloc(sizeof(XIToken));
                                 snippet_name->type = XI_TEXT;
@@ -534,7 +490,6 @@ static WKList *xi_lexer(FILE *xi_file) {
                                         wk_str_suffix_char(cache, *q);
                                 }
                                 snippet->content = cache;
-#line 566 "xi.xi"
                                 /* 删除 it */
                                 WKLink *next = it->next;
         			wk_str_free(t->content);
@@ -555,8 +510,6 @@ static WKList *xi_lexer(FILE *xi_file) {
                 }
                 it = it->next;
         }
-#line 1104 "xi.xi"
-#line 760 "xi.xi"
         it = xi_tokens->head;
         while (1) {
                 if (!it) break;
@@ -566,7 +519,6 @@ static WKList *xi_lexer(FILE *xi_file) {
                         if (prev) {
                                 XIToken *a = wk_link_get(prev, XIToken *);
                                 if (a->type == XI_SNIPPET_NAME_DELIMITER) {
-#line 745 "xi.xi"
                                         WKStr *language = extract_block(t, xi_symbols->language_start_mark, xi_symbols->language_stop_mark);
                                         if (language) {
                                                 add_block(xi_tokens,
@@ -577,14 +529,11 @@ static WKList *xi_lexer(FILE *xi_file) {
                                                           xi_symbols->language_stop_mark,
                                                           XI_LANGUAGE_STOP_MARK);
                                         }
-#line 770 "xi.xi"
                                 }
                         }
                 }
                 it = it->next;
         }
-#line 1105 "xi.xi"
-#line 871 "xi.xi"
         it = xi_tokens->head;
         while (1) {
                 if (!it) break;
@@ -595,7 +544,6 @@ static WKList *xi_lexer(FILE *xi_file) {
                                 XIToken *a = wk_link_get(prev, XIToken *);
                                 if (a->type == XI_SNIPPET_NAME_DELIMITER
                                     || a->type == XI_LANGUAGE_STOP_MARK) {
-#line 784 "xi.xi"
                                         WKStr *tag_reference = extract_block(t, xi_symbols->tag_start_mark, xi_symbols->tag_stop_mark);
                                         if (tag_reference) {
                                                 add_block(xi_tokens,
@@ -606,8 +554,6 @@ static WKList *xi_lexer(FILE *xi_file) {
                                                           xi_symbols->tag_stop_mark,
                                                           XI_TAG_STOP_MARK);
                                         }
-#line 882 "xi.xi"
-#line 850 "xi.xi"
                                         WKStr *appending_mark = extract_operator(t, xi_symbols->snippet_appending_mark);
                                         if (appending_mark) {
                                                 add_operator(xi_tokens,
@@ -623,14 +569,11 @@ static WKList *xi_lexer(FILE *xi_file) {
                                                                      XI_SNIPPET_PREPENDING_MARK);
                                                 }
                                         }
-#line 883 "xi.xi"
                                 }
                         }
                 }
                 it = it->next;
         }
-#line 1106 "xi.xi"
-#line 910 "xi.xi"
         it = xi_tokens->head;
         while (1) {
                 if (!it) break;
@@ -643,7 +586,6 @@ static WKList *xi_lexer(FILE *xi_file) {
                                     || a->type == XI_LANGUAGE_STOP_MARK
                                     || a->type == XI_SNIPPET_APPENDING_MARK
                                     || a->type == XI_SNIPPET_PREPENDING_MARK) {
-#line 895 "xi.xi"
                                         WKStr *tag_mark = extract_block(t, xi_symbols->tag_start_mark, xi_symbols->tag_stop_mark);
                                         if (tag_mark) {
                                                 add_block(xi_tokens,
@@ -654,14 +596,11 @@ static WKList *xi_lexer(FILE *xi_file) {
                                                           xi_symbols->tag_stop_mark,
                                                           XI_TAG_STOP_MARK);
                                         }
-#line 923 "xi.xi"
                                 }
                         }
                 }
                 it = it->next;
         }
-#line 1107 "xi.xi"
-#line 1058 "xi.xi"
         it = xi_tokens->head;
         while (1) {
                 if (!it) break;
@@ -674,7 +613,6 @@ static WKList *xi_lexer(FILE *xi_file) {
                                     && t_prev->type != XI_LANGUAGE_START_MARK
                                     && t_prev->type != XI_TAG_START_MARK) {
                                         while (1) {
-#line 1082 "xi.xi"
                                                 WKPair *snippet_reference = find_snippet_reference(t->content);
                                                 if (!snippet_reference) break;
                                                 else {
@@ -683,18 +621,14 @@ static WKList *xi_lexer(FILE *xi_file) {
                                                         wk_box_free(snippet_reference->y);
                                                         free(snippet_reference);
                                                 }
-#line 1071 "xi.xi"
                                         }
                                 }
                         }
                 }
                 it = it->next;
         }
-#line 1108 "xi.xi"
         return xi_tokens;
 }
-#line 1632 "xi.xi"
-#line 1189 "xi.xi"
 typedef enum {
         XI_SNIPPET,
         XI_SNIPPET_WITH_NAME,
@@ -708,14 +642,11 @@ typedef enum {
         XI_SNIPPET_REFERENCE,
         XI_SNIPPET_TEXT
 } XISyntaxType;
-#line 1179 "xi.xi"
 typedef struct {
         XISyntaxType type;
         WKList *tokens;
         size_t id;
 } XISyntax;
-#line 1633 "xi.xi"
-#line 1219 "xi.xi"
 static WKTree *syntax_tree_init(WKList *tokens) {
         WKTree *xi_tree = wk_tree(XISyntax *);
         wk_tree_add(xi_tree, NULL, NULL, XISyntax *); /* 根节点为空 */
@@ -729,7 +660,6 @@ static WKTree *syntax_tree_init(WKList *tokens) {
                                 x->type = XI_SNIPPET; /* 默认类型，后续会确定它是否为有名片段 */
                                 x->tokens = wk_list(XIToken *);
                                 x->id = 0;
-#line 1258 "xi.xi"
                                 WKLink *a = prev;
                                 while (1) {
                                         if (a) {
@@ -745,7 +675,6 @@ static WKTree *syntax_tree_init(WKList *tokens) {
                                         } else break;
                                         a = a->prev;
                                 }
-#line 1233 "xi.xi"
                                 /* 注意，词法分析阶段，在记号列表尾部强行插入了一个片段界限记号，
                                    若该记号之前也是片段界限记号，会导致 x 的内容为空，需要予以忽略 */
                                 if (x->tokens) {
@@ -766,20 +695,16 @@ static WKTree *syntax_tree_init(WKList *tokens) {
         wk_list_free(tokens);
         return xi_tree;
 }
-#line 1428 "xi.xi"
 static void add_branches_for_snippet_with_name(WKTree *syntax_tree, WKBranch *x_bra) {
-#line 1282 "xi.xi"
         XISyntax *x = wk_branch_get(x_bra, XISyntax *);
         WKLink *it = x->tokens->head;
         XIToken *x_tok = wk_link_get(it, XIToken *);
-#line 1290 "xi.xi"
         XISyntax *x_name = malloc(sizeof(XISyntax));
         x_name->type = XI_SNIPPET_NAME;
         x_name->tokens = wk_list(XIToken *);
         x_name->id = 0;
         wk_list_suffix(x_name->tokens, x_tok, XIToken *);
         wk_tree_add(syntax_tree, x_bra, x_name, XISyntax *);
-#line 1301 "xi.xi"
         it = it->next->next; /* 跳过片段名字界限符 */
         x_tok = wk_link_get(it, XIToken *);
         if (x_tok->type == XI_LANGUAGE_START_MARK) {
@@ -795,7 +720,6 @@ static void add_branches_for_snippet_with_name(WKTree *syntax_tree, WKBranch *x_
                 x_tok = wk_link_get(it, XIToken *);
                 it = it->next; /* 跳过语言标记终结符 */
         }
-#line 1321 "xi.xi"
         x_tok = wk_link_get(it, XIToken *);
         if (x_tok->type == XI_TAG_START_MARK) {
                 bool is_tag_ref = false;
@@ -820,7 +744,6 @@ static void add_branches_for_snippet_with_name(WKTree *syntax_tree, WKBranch *x_
                         it = it->next->next;
                 }
         }
-#line 1350 "xi.xi"
         x_tok = wk_link_get(it, XIToken *);
         XISyntax *x_op = NULL;
         if (x_tok->type == XI_SNIPPET_APPENDING_MARK) {
@@ -839,7 +762,6 @@ static void add_branches_for_snippet_with_name(WKTree *syntax_tree, WKBranch *x_
                 wk_tree_add(syntax_tree, x_bra, x_op, XISyntax *);
                 it = it->next;
         }
-#line 1373 "xi.xi"
         x_tok = wk_link_get(it, XIToken *);
         if (x_tok->type == XI_TAG_START_MARK) {
                 XISyntax *x_tag = malloc(sizeof(XISyntax));
@@ -853,7 +775,6 @@ static void add_branches_for_snippet_with_name(WKTree *syntax_tree, WKBranch *x_
                 /* 跳过标签结束符 */
                 it = it->next->next;
         }
-#line 1391 "xi.xi"
         XISyntax *x_content = malloc(sizeof(XISyntax));
         x_content->type = XI_SNIPPET_CONTENT;
         x_content->tokens = wk_list(XIToken *);
@@ -863,8 +784,6 @@ static void add_branches_for_snippet_with_name(WKTree *syntax_tree, WKBranch *x_
                 wk_list_suffix(x_content->tokens, x_tok, XIToken *);
         }
         wk_tree_add(syntax_tree, x_bra, x_content, XISyntax *);
-#line 1430 "xi.xi"
-#line 1405 "xi.xi"
         for (it = x->tokens->head; it; it = it->next) {
                 x_tok = wk_link_get(it, XIToken *);
                 if (x_tok->type == XI_SNIPPET_NAME_DELIMITER
@@ -876,13 +795,9 @@ static void add_branches_for_snippet_with_name(WKTree *syntax_tree, WKBranch *x_
                         free(x_tok);
                 }
         }
-#line 1431 "xi.xi"
-#line 1421 "xi.xi"
         wk_list_free(x->tokens);
         x->tokens = NULL;
-#line 1432 "xi.xi"
 }
-#line 1460 "xi.xi"
 static void add_branches_for_snippet_content(WKTree *syntax_tree, WKBranch *x_bra) {
         XISyntax *x = wk_branch_get(x_bra, XISyntax *);
         WKLink *it = x->tokens->head;
@@ -922,8 +837,6 @@ static void add_branches_for_snippet_content(WKTree *syntax_tree, WKBranch *x_br
         wk_list_free(x->tokens);
         x->tokens = NULL;
 }
-#line 1634 "xi.xi"
-#line 1526 "xi.xi"
 static size_t first_token_line_number(WKBranch *x) {
         size_t n = 0;
         XISyntax *a = wk_branch_get(x, XISyntax *);
@@ -941,10 +854,7 @@ static size_t first_token_line_number(WKBranch *x) {
         }
         return n;
 }
-#line 1635 "xi.xi"
-/* #line 1548 "xi.xi"
-#line 1129 "xi.xi"
-static void xi_print_tokens(WKList *tokens) {
+/* static void xi_print_tokens(WKList *tokens) {
         for (WKLink *it = tokens->head; it; it = it->next) {
                 XIToken *t = wk_link_get(it, XIToken *);
                 switch (t->type) {
@@ -987,7 +897,6 @@ static void xi_print_tokens(WKList *tokens) {
                 printf(" | line %lu: %s\n", t->line_number, t->content->body);
         }
 }
-#line 1549 "xi.xi"
 static void xi_print_syntax_tree(WKBranch *root) {
         if (!root) return;
         XISyntax *a = wk_branch_get(root, XISyntax *);
@@ -1041,9 +950,7 @@ static void xi_print_syntax_tree(WKBranch *root) {
                         xi_print_syntax_tree(p);
                 }
         }
-}
-#line 1635 "xi.xi" */
-#line 1608 "xi.xi"
+} */
 static void delete_syntax_body(WKBranch *root) {
         if (!root) return;
         XISyntax *x = wk_branch_get(root, XISyntax *);
@@ -1060,11 +967,9 @@ static void delete_syntax_body(WKBranch *root) {
 static void xi_delete_syntax_tree(WKTree *syntax_tree) {
         delete_syntax_body(syntax_tree->root);
         wk_tree_free(syntax_tree);
-}
-#line 1637 "xi.xi" 
+} 
 static WKTree *xi_parser(WKList *tokens) {
         WKTree *xi_tree = syntax_tree_init(tokens);
-#line 1438 "xi.xi"
         WKArray *branches = xi_tree->root->lower;
         for (size_t i = 0; i < branches->n; i++) {
                 WKBranch *x_bra = wk_array_get(branches, i, WKBranch *);
@@ -1073,8 +978,6 @@ static WKTree *xi_parser(WKList *tokens) {
                         add_branches_for_snippet_with_name(xi_tree, x_bra);
                 }
         }
-#line 1640 "xi.xi"
-#line 1504 "xi.xi"
         WKArray *second_level_branches = xi_tree->root->lower;
         for (size_t i = 0; i < second_level_branches->n; i++) {
                 WKBranch *x_bra = wk_array_get(second_level_branches, i, WKBranch *);
@@ -1090,18 +993,13 @@ static WKTree *xi_parser(WKList *tokens) {
                         }
                 }
         }
-#line 1641 "xi.xi"
         return xi_tree;
 }
-#line 1962 "xi.xi"
-#line 1650 "xi.xi"
 typedef struct {
         WKArray *time_order;
         WKArray *spatial_order;
         WKArray *emissions;
 } XITie;
-#line 1963 "xi.xi"
-#line 1664 "xi.xi"
 static WKStr *compact_text(WKStr *a, WKArray *skipped_chars) {
         WKStr *b = wk_str(a->body);
         for (size_t i = 0; i < skipped_chars->n; i++) {
@@ -1110,10 +1008,8 @@ static WKStr *compact_text(WKStr *a, WKArray *skipped_chars) {
         }
         return b;
 }
-#line 1704 "xi.xi"
 static void init_tie(WKTable *relations, WKBranch *x_bra) {
         WKStr *x_name = NULL;
-#line 1747 "xi.xi"
         for (size_t i = 0; i < x_bra->lower->n; i++) {
                 WKBranch *y_bra = wk_array_get(x_bra->lower, i, WKBranch *);
                 XISyntax *y = wk_branch_get(y_bra, XISyntax *);
@@ -1123,7 +1019,6 @@ static void init_tie(WKTable *relations, WKBranch *x_bra) {
                         break;
                 }
         }
-#line 1707 "xi.xi"
         if (!x_name) {
                 fprintf(stderr, "Line %lu: Illegal snipet.\n", first_token_line_number(x_bra));
                 exit(EXIT_FAILURE);
@@ -1135,7 +1030,6 @@ static void init_tie(WKTable *relations, WKBranch *x_bra) {
                 bool has_appending_operator = false;
                 bool has_prepending_operator = false;
                 WKStr *x_tag_ref = NULL;
-#line 1759 "xi.xi"
                 for (size_t i = 0; i < x_bra->lower->n; i++) {
                         WKBranch *y_bra = wk_array_get(x_bra->lower, i, WKBranch *);
                         XISyntax *y = wk_branch_get(y_bra, XISyntax *);
@@ -1152,11 +1046,9 @@ static void init_tie(WKTable *relations, WKBranch *x_bra) {
                                 break;
                         }
                 }
-#line 1719 "xi.xi"
                 if (x_tag_ref) {
                         WKStr *t = compact_text(x_tag_ref, xi_skipped_chars_in_name);
                         int id = -1;
-#line 1780 "xi.xi"
                         size_t hits = 0;
                         for (int i = 0; i < tie->time_order->n; i++) {
                                 WKBranch *y_bra = wk_array_get(tie->time_order, i, WKBranch *);
@@ -1182,8 +1074,6 @@ static void init_tie(WKTable *relations, WKBranch *x_bra) {
                                 fprintf(stderr, "Line %lu: The referenced tag does not exist.\n", first_token_line_number(x_bra));
                                 exit(EXIT_FAILURE);
                         }
-#line 1723 "xi.xi"
-#line 1809 "xi.xi"
                         if (has_appending_operator) wk_array_ins(tie->time_order, id + 1, x_bra, WKBranch *);
                         else if (has_prepending_operator) wk_array_ins(tie->time_order, id, x_bra, WKBranch *);
                         else {
@@ -1191,10 +1081,8 @@ static void init_tie(WKTable *relations, WKBranch *x_bra) {
                                                 first_token_line_number(x_bra));
                                 exit(EXIT_FAILURE);
                         }
-#line 1725 "xi.xi"
                         wk_str_free(t);
                 } else {
-#line 1819 "xi.xi"
                         if (has_appending_operator) wk_array_add(tie->time_order, x_bra, WKBranch *);
                         else if (has_prepending_operator) wk_array_ins(tie->time_order, 0, x_bra, WKBranch *);
                         else {
@@ -1202,7 +1090,6 @@ static void init_tie(WKTable *relations, WKBranch *x_bra) {
                                                 first_token_line_number(x_bra));
                                 exit(EXIT_FAILURE);
                         }
-#line 1729 "xi.xi"
                 }
                 wk_array_add(tie->spatial_order, x_bra, WKBranch *);
                 wk_str_free(key);
@@ -1216,7 +1103,6 @@ static void init_tie(WKTable *relations, WKBranch *x_bra) {
                 wk_table_add(relations, wk_pair(wk_box(key, WKStr *), wk_box(tie, XITie *)));
         }
 }
-#line 1833 "xi.xi"
 static void create_relation(WKTable *relations, WKBranch *x_bra, XISyntax *a)
 {
         XIToken *a_tok = wk_link_get(a->tokens->head, XIToken *);
@@ -1232,7 +1118,6 @@ static void create_relation(WKTable *relations, WKBranch *x_bra, XISyntax *a)
         }
         wk_str_free(s);
 }
-#line 1853 "xi.xi"
 /* root 为语法树根节点 */
 static WKTable *xi_create_relations(WKBranch *root) {
         WKTable *relations = wk_table(WKStr *, XITie *);
@@ -1256,8 +1141,6 @@ static WKTable *xi_create_relations(WKBranch *root) {
         }
         return relations;
 }
-#line 1964 "xi.xi"
-#line 1929 "xi.xi"
 static void xi_tie_box_free(WKBox *tie_box) {
         XITie *tie = wk_box_get(tie_box, XITie *);
         wk_array_free(tie->spatial_order);
@@ -1266,9 +1149,6 @@ static void xi_tie_box_free(WKBox *tie_box) {
         free(tie);
         wk_box_free(tie_box);
 }
-#line 1965 "xi.xi"
-#line 2143 "xi.xi"
-#line 2029 "xi.xi"
 static WKStr *cascade_indents(WKList *indents) {
         WKStr *current_indent = wk_str(NULL);
         for (WKLink *it = indents->head; it; it = it->next) {
@@ -1277,8 +1157,6 @@ static WKStr *cascade_indents(WKList *indents) {
         }
         return current_indent;
 }
-#line 2144 "xi.xi"
-#line 2101 "xi.xi"
 static WKStr *last_blank_line(XISyntax *a) {
         if (a->type != XI_SNIPPET_TEXT) return NULL;
         WKStr *blank_line = wk_str(NULL);
@@ -1294,7 +1172,6 @@ static WKStr *last_blank_line(XISyntax *a) {
         }
         return blank_line;
 }
-#line 1972 "xi.xi"
 static void xi_tangle(const char *xi_file_path,
                       WKTree *syntax_tree,
                       WKTable *relations,
@@ -1338,7 +1215,6 @@ static void xi_tangle(const char *xi_file_path,
                         XISyntax *z = wk_branch_get(z_bra, XISyntax *);
                         XIToken *z_tok = wk_link_get(z->tokens->head, XIToken *);
                         if (z->type == XI_SNIPPET_REFERENCE) {
-#line 2121 "xi.xi"
                                 if (j > 0) {
                                         /* 获得缩进 */
                                 	WKBranch *z_prev_bra = wk_array_get(y_bra->lower, j - 1, WKBranch *);
@@ -1356,14 +1232,11 @@ static void xi_tangle(const char *xi_file_path,
                                                 wk_list_del(indents, indents->head);
                                         }
                                 }
-#line 2016 "xi.xi"
                         } else {
-#line 2042 "xi.xi"
                                 WKStr *text = z_tok->content;
                                 const char *head = text->body;
                                 const char *tail = text->body + text->n;
                                 if (show_line_number) {
-#line 2073 "xi.xi"
                                         WKStr *cache_tail = wk_str(NULL);
                                         const char *p = cache->body + cache->n;
                                         p = xi_skip(cache->body, cache->body + cache->n, p, -1, xi_skipped_chars);
@@ -1387,7 +1260,6 @@ static void xi_tangle(const char *xi_file_path,
                                         if (cache_tail->n > 0) wk_str_suffix(cache, cache_tail->body);
                                         wk_str_free(line_number_text);
                                         wk_str_free(cache_tail);
-#line 2047 "xi.xi"
                                 }
                                 /* 首节点掐头 */
                                 if (j == 0) {
@@ -1409,16 +1281,12 @@ static void xi_tangle(const char *xi_file_path,
                                                 }
                                         }
                                 }
-#line 2018 "xi.xi"
 			}
                 }
                 wk_str_free(current_indent);
         }
         wk_str_free(key);
 }
-#line 2145 "xi.xi"
-#line 2962 "xi.xi"
-#line 2328 "xi.xi"
 static XIToken *find_language_token(WKBranch *x) {
         XIToken *language_token = NULL;
         for (size_t i = 0; i < x->lower->n; i++) {
@@ -1431,7 +1299,6 @@ static XIToken *find_language_token(WKBranch *x) {
         }
         return language_token;
 }
-#line 2272 "xi.xi"
 static void get_thread(WKTable *relations, WKStr *entrance, WKList *thread) {
         WKStr *key = compact_text(entrance, xi_skipped_chars_in_name);
         WKBox *tie_box = wk_table_query(relations, wk_box_ref(key, WKStr *));
@@ -1455,7 +1322,6 @@ static void get_thread(WKTable *relations, WKStr *entrance, WKList *thread) {
         }
         wk_str_free(key);
 }
-#line 2300 "xi.xi"
 static void spread_language_mark_in_thread(WKTree *xi_tree, WKList *thread) {
         XIToken *x_lang_tok = NULL;
         for (WKLink *it = thread->head; it; it = it->next) {
@@ -1475,7 +1341,6 @@ static void spread_language_mark_in_thread(WKTree *xi_tree, WKList *thread) {
                                                 x_lang_tok->line_number, lang_tok->line_number);
                         }
                 } else {
-#line 2345 "xi.xi"
                         XIToken *new_lang_tok = malloc(sizeof(XIToken));
                         new_lang_tok->type = XI_TEXT;
                         new_lang_tok->content = wk_str(x_lang_tok->content->body);
@@ -1495,11 +1360,9 @@ static void spread_language_mark_in_thread(WKTree *xi_tree, WKList *thread) {
                         new_lang->id = 0;
                         /* 新节点会作为 x 的第 2 个节点 */
                         wk_tree_ins(xi_tree, x_bra, 1, new_lang, XISyntax *);
-#line 2320 "xi.xi"
                 }
         }
 }
-#line 2369 "xi.xi"
 static void spread_language_mark(WKTree *xi_tree, WKTable *relations) {
         for (size_t i = 0; i < xi_tree->root->lower->n; i++) {
                 WKBranch *x_bra = wk_array_get(xi_tree->root->lower, i, WKBranch *);
@@ -1516,8 +1379,6 @@ static void spread_language_mark(WKTree *xi_tree, WKTable *relations) {
                 }
         }
 }
-#line 2963 "xi.xi"
-#line 2527 "xi.xi"
 WKArray *snippet_name_split(WKStr *name) {
         WKStr *continuation = xi_symbols->snippet_name_continuation;
         WKArray *segments = wk_array(WKStr *);
@@ -1581,13 +1442,11 @@ WKArray *snippet_name_split(WKStr *name) {
         wk_str_free(quad);
         return segments;
 }
-#line 2409 "xi.xi"
 static void output_snippet_with_name(WKTree *syntax_tree, WKBranch *x_bra, WKTable *relations, FILE *output) {
         XISyntax *x = wk_branch_get(x_bra, XISyntax *);
         WKStr *x_name = NULL;
         WKStr *x_id_text = wk_str(NULL);
         wk_str_printf(x_id_text, "%lu", x->id);
-#line 2450 "xi.xi"
         if (xi_fmt->snippet_start->n > 0) {
                 XIToken *x_lang_tok = find_language_token(x_bra);
                 WKStr *a = wk_str(xi_fmt->snippet_start->body);
@@ -1597,14 +1456,12 @@ static void output_snippet_with_name(WKTree *syntax_tree, WKBranch *x_bra, WKTab
                 fprintf(output, "%s", a->body);
                 wk_str_free(a);
         }
-#line 2415 "xi.xi"
         for (size_t i = 0; i < x_bra->lower->n; i++) {
                 WKBranch *y_bra = wk_array_get(x_bra->lower, i, WKBranch *);
                 XISyntax *y = wk_branch_get(y_bra, XISyntax *);
                 XIToken *y_tok = y->tokens ? wk_link_get(y->tokens->head, XIToken *) : NULL;
                 switch (y->type) {
                 case XI_SNIPPET_NAME:
-#line 2476 "xi.xi"
                         x_name = y_tok->content; /* 保存片段名，留待输出片段引用者时用 */
                         if (xi_fmt->snippet_name->n > 0) {
                                 WKArray *segments = snippet_name_split(x_name);
@@ -1620,6 +1477,7 @@ static void output_snippet_with_name(WKTree *syntax_tree, WKBranch *x_bra, WKTab
                                         if (j % 2 == 0) {
                                                 WKStr *snippet_name_t = wk_str(xi_fmt->snippet_name->body);
                                                 wk_str_replace(snippet_name_t, "${name}", segment->body);
+                                                wk_str_replace(snippet_name_t, "${id}", x_id_text->body);
                                                 fprintf(output, "%s", snippet_name_t->body);
                                                 wk_str_free(snippet_name_t);
                                         } else { /* 输出续行符以及下一行的前导空白字符 */
@@ -1651,10 +1509,8 @@ static void output_snippet_with_name(WKTree *syntax_tree, WKBranch *x_bra, WKTab
                                                xi_symbols->snippet_delimiter->body,
                                                y_tok->content->body,
                                                xi_symbols->snippet_name_delimiter->body);
-#line 2422 "xi.xi"
                         break;
                 case XI_SNIPPET_TAG_REFERENCE:
-#line 2595 "xi.xi"
                         if (xi_fmt->snippet_tag_reference->n > 0) {
                                 WKStr *a = wk_str(xi_fmt->snippet_tag_reference->body);
                                 wk_str_replace(a, "${id}", x_id_text->body);
@@ -1667,24 +1523,18 @@ static void output_snippet_with_name(WKTree *syntax_tree, WKBranch *x_bra, WKTab
                                                 y_tok->content->body,
                                                 xi_symbols->tag_stop_mark->body);
                         }
-#line 2425 "xi.xi"
                         break;
                 case XI_SNIPPET_APPENDING_OPERATOR:
-#line 2612 "xi.xi"
                         if (xi_fmt->snippet_appending_operator->n > 0) {
                                 fprintf(output, "%s", xi_fmt->snippet_appending_operator->body);
                         } else fprintf(output, " %s", xi_symbols->snippet_appending_mark->body);
-#line 2428 "xi.xi"
                         break;
                 case XI_SNIPPET_PREPENDING_OPERATOR:
-#line 2618 "xi.xi"
                         if (xi_fmt->snippet_prepending_operator->n > 0) {
                                 fprintf(output, "%s", xi_fmt->snippet_prepending_operator->body);
                         } else fprintf(output, " %s", xi_symbols->snippet_prepending_mark->body);
-#line 2431 "xi.xi"
                         break;
                 case XI_SNIPPET_TAG:
-#line 2626 "xi.xi"
                         do {
                                 XIToken *tag_tok = wk_link_get(y->tokens->head, XIToken *);
                                 if (xi_fmt->snippet_tag->n > 0) {
@@ -1700,10 +1550,8 @@ static void output_snippet_with_name(WKTree *syntax_tree, WKBranch *x_bra, WKTab
                                                         xi_symbols->tag_stop_mark->body);
                                 }
                         } while (0);
-#line 2434 "xi.xi"
                         break;
                 case XI_SNIPPET_CONTENT:
-#line 2646 "xi.xi"
                         for (size_t j = 0; j < y_bra->lower->n; j++) {
                                 WKBranch *z_bra = wk_array_get(y_bra->lower, j, WKBranch *);
                                 XISyntax *z = wk_branch_get(z_bra, XISyntax *);
@@ -1715,10 +1563,13 @@ static void output_snippet_with_name(WKTree *syntax_tree, WKBranch *x_bra, WKTab
                                         WKBox *tie_box = wk_table_query(relations, wk_box_ref(key, WKStr *));
                                         wk_str_free(key);
                                         if (tie_box) {
-#line 2669 "xi.xi"
                                                 XITie *tie = wk_box_get(tie_box, XITie *);
                                                 if (xi_fmt->snippet_reference->n > 0) {
                                                         WKArray *segments = snippet_name_split(z_tok->content);
+                                                        WKStr *z_id_text = wk_str(NULL);
+                                                        WKBranch *a_bra = wk_array_get(tie->spatial_order, 0, WKBranch *);
+                                                        XISyntax *a = wk_branch_get(a_bra, XISyntax *);
+                                                        wk_str_printf(z_id_text, "%lu", a->id);
                                                         if (xi_fmt->snippet_reference_start->n > 0) {
                                                                 fprintf(output, "%s", xi_fmt->snippet_reference_start->body);
                                                         } else {
@@ -1729,6 +1580,7 @@ static void output_snippet_with_name(WKTree *syntax_tree, WKBranch *x_bra, WKTab
                                                                 if (k % 2 == 0) {
                                                                         WKStr *snippet_name_t = wk_str(xi_fmt->snippet_reference->body);
                                                                         wk_str_replace(snippet_name_t, "${name}", segment->body);
+                                                                        wk_str_replace(snippet_name_t, "${id}", z_id_text->body);
                                                                         fprintf(output, "%s", snippet_name_t->body);
                                                                         wk_str_free(snippet_name_t);
                                                                 } else { /* 输出续行符以及下一行的前导空白字符 */
@@ -1749,11 +1601,7 @@ static void output_snippet_with_name(WKTree *syntax_tree, WKBranch *x_bra, WKTab
                                                         } else {
                                                                 fprintf(output, "%s", xi_symbols->snippet_reference_stop_mark->body);
                                                         }
-                                                        /* 输出片段 id 序列：同名片段，只输出首个 id */
-                                                        WKStr *z_id_text = wk_str(NULL);
-                                                        WKBranch *a_bra = wk_array_get(tie->spatial_order, 0, WKBranch *);
-                                                        XISyntax *a = wk_branch_get(a_bra, XISyntax *);
-                                                        wk_str_printf(z_id_text, "%lu", a->id);
+                                                        /* 输出片段 id 序列，若是同名片段，只输出首个 id */
                                                         if (xi_fmt->snippet_reference_id->n > 0) {
                                                                 WKStr *z_id_fmt = wk_str(xi_fmt->snippet_reference_id->body);
                                                                 wk_str_replace(z_id_fmt, "${id}", z_id_text->body);
@@ -1767,19 +1615,16 @@ static void output_snippet_with_name(WKTree *syntax_tree, WKBranch *x_bra, WKTab
                                                                          z_tok->content->body,
                                                                          xi_symbols->snippet_reference_stop_mark->body);
                                                 }
-#line 2658 "xi.xi"
                                         } else {
                                                 fprintf(stderr, "Line %lu: the snippet <%s> not defined!\n",
                                                                 z_tok->line_number, z_tok->content->body);
                                         }
                                 }
                         }
-#line 2437 "xi.xi"
                         break;
                 default: ;
                 }
         }
-#line 2725 "xi.xi"
         if (xi_fmt->snippet_emission->n > 0) {
                 WKStr *x_key = compact_text(x_name, xi_skipped_chars_in_name);
                 WKBox *tie_box = wk_table_query(relations, wk_box_ref(x_key, WKStr *));
@@ -1806,8 +1651,6 @@ static void output_snippet_with_name(WKTree *syntax_tree, WKBranch *x_bra, WKTab
                 }
                 wk_str_free(x_key);
         }
-#line 2442 "xi.xi"
-#line 2462 "xi.xi"
         if (xi_fmt->snippet_stop->n > 0) {
                 XIToken *x_lang_tok = find_language_token(x_bra);
                 WKStr *a = wk_str(xi_fmt->snippet_stop->body);
@@ -1817,10 +1660,8 @@ static void output_snippet_with_name(WKTree *syntax_tree, WKBranch *x_bra, WKTab
                 fprintf(output, "%s", a->body);
                 wk_str_free(a);
         }
-#line 2443 "xi.xi"
         wk_str_free(x_id_text);
 }
-#line 2392 "xi.xi"
 static void xi_weave(WKTree *xi_tree, WKTable *relations, FILE *output) {
         for (size_t i = 0; i < xi_tree->root->lower->n; i++) {
                 WKBranch *x_bra = wk_array_get(xi_tree->root->lower, i, WKBranch *);
@@ -1833,8 +1674,6 @@ static void xi_weave(WKTree *xi_tree, WKTable *relations, FILE *output) {
                 }
         }
 }
-#line 2964 "xi.xi"
-#line 2824 "xi.xi"
 static void yaml_output_multilines(FILE *output, const char *text, const char *indent) {
         WKStr *cache = wk_str(NULL);
         for (const char *p = text; *p != '\0'; p++) {
@@ -1848,7 +1687,6 @@ static void yaml_output_multilines(FILE *output, const char *text, const char *i
         if (cache->n > 0) fprintf(output, "%s", cache->body);
         wk_str_free(cache);
 }
-#line 2843 "xi.xi"
 static void snippet_with_name_to_yaml(WKTree *syntax_tree,
                                       WKBranch *x_bra,
                                       WKTable *relations,
@@ -1887,7 +1725,6 @@ static void snippet_with_name_to_yaml(WKTree *syntax_tree,
                         fprintf(output, "  tag: '%s'\n", y_tok->content->body);
                         break;
                 case XI_SNIPPET_CONTENT:
-#line 2894 "xi.xi"
                         fprintf(output, "  content:\n");
                         for (size_t j = 0; j < y_bra->lower->n; j++) {
                                 WKBranch *z_bra = wk_array_get(y_bra->lower, j, WKBranch *);
@@ -1924,12 +1761,10 @@ static void snippet_with_name_to_yaml(WKTree *syntax_tree,
                                         wk_str_free(key);
                                 } else ;
                         }
-#line 2882 "xi.xi"
                         break;
                 default: ;
                 }
         }
-#line 2935 "xi.xi"
         WKStr *x_key = compact_text(x_name, xi_skipped_chars_in_name);
         WKBox *tie_box = wk_table_query(relations, wk_box_ref(x_key, WKStr *));
         if (tie_box) {
@@ -1950,10 +1785,8 @@ static void snippet_with_name_to_yaml(WKTree *syntax_tree,
                 }
         }
         wk_str_free(x_key);
-#line 2887 "xi.xi"
         wk_str_free(x_id_text);
 }
-#line 2800 "xi.xi"
 static void xi_yaml_output(WKTree *xi_tree,
                            WKTable *relations,
                            XIFmt *fmt,
@@ -1973,8 +1806,6 @@ static void xi_yaml_output(WKTree *xi_tree,
                 }
         }
 }
-#line 2965 "xi.xi"
-#line 3077 "xi.xi"
 WKArray *str_split(const char *str, const char *sep) {
         /* 主动在 str 的内容尾部追加 sep，从而将分割过程限制在一个循环里 */
         WKStr *str_1 = wk_str(str);
@@ -2002,9 +1833,7 @@ WKArray *str_split(const char *str, const char *sep) {
         wk_str_free(str_1);
         return a;
 }
-#line 3176 "xi.xi"
 int main(int argc, char **argv) {
-#line 2991 "xi.xi"
         WKArg xi_args[] = {
                 WK_ARG_TOGGLE("tangle", "t"),
                 WK_ARG_TEXT("entrance", "e"),
@@ -2051,9 +1880,7 @@ int main(int argc, char **argv) {
                         }
                 }
         }
-#line 3178 "xi.xi"
         if (help_opt) {
-#line 3042 "xi.xi"
                 fprintf(stdout, "COMMAND: xi [OPTION]... FILE\n\n");
                 fprintf(stdout, "%-16s  %s\n", "--tangle, -t",   "extract code snippets.");
                 fprintf(stdout, "%-16s  %s\n", "--entrance, -e", "specify the name of the code fragment to extract.");
@@ -2065,10 +1892,7 @@ int main(int argc, char **argv) {
                 fprintf(stdout, "%-16s  %s\n", "--config, -c",   "specify the path to the xi configuration file.");
                 fprintf(stdout, "%-16s  %s\n", "--output, -o",   "set the output file name or path for xi.");
                 fprintf(stdout, "%-16s  %s\n", "--help, -h",     "display this help and exit.");
-#line 3180 "xi.xi"
         } else {
-#line 3109 "xi.xi"
-#line 240 "xi.xi"
                 xi_symbols = malloc(sizeof(XISymbols));
                 *xi_symbols = (XISymbols){
                         .snippet_delimiter = wk_str("@"),
@@ -2083,8 +1907,6 @@ int main(int argc, char **argv) {
                         .snippet_reference_start_mark = wk_str("#"),
                         .snippet_reference_stop_mark = wk_str("@")
                 };
-#line 3110 "xi.xi"
-#line 276 "xi.xi"
                 WKTable *user_config = xi_config_path ? wk_cfg(xi_config_path) : NULL;
                 /* 用 user_config 中的设定，替换 xi_config 中的字段 */
                 if (user_config) {
@@ -2100,7 +1922,6 @@ int main(int argc, char **argv) {
                         XI_USER_CONFIG(user_config, xi_symbols, snippet_reference_start_mark);
                         XI_USER_CONFIG(user_config, xi_symbols, snippet_reference_stop_mark);
                 }
-#line 2201 "xi.xi"
                 xi_fmt = malloc(sizeof(XIFmt));
                 *xi_fmt = (XIFmt){ wk_str(NULL), wk_str(NULL), wk_str(NULL), wk_str(NULL),
                                    wk_str(NULL), wk_str(NULL), wk_str(NULL), wk_str(NULL),
@@ -2141,17 +1962,13 @@ int main(int argc, char **argv) {
                         wk_str_replace(xi_fmt->snippet_appending_operator, "\\n", "\n");
                         wk_str_replace(xi_fmt->snippet_prepending_operator, "\\n", "\n");
                 }
-#line 3111 "xi.xi"
-#line 330 "xi.xi"
                 FILE *xi_file = xi_file_path ? fopen(xi_file_path, "r") : stdin;
                 if (!xi_file) {
                 	fprintf(stderr, "Failed to open %s\n", xi_file_path);
                 	exit(EXIT_FAILURE);
                 }
-#line 3112 "xi.xi"
                 WKList *xi_tokens = xi_lexer(xi_file);
                 WKTree *xi_tree = xi_parser(xi_tokens);
-#line 1681 "xi.xi"
                 xi_skipped_chars_in_name = wk_array(const char *);
                 wk_array_add(xi_skipped_chars_in_name, " ", const char *);
                 wk_array_add(xi_skipped_chars_in_name, "　", const char *);
@@ -2164,15 +1981,9 @@ int main(int argc, char **argv) {
                 wk_array_add(xi_skipped_chars_in_name, "\"", const char *);
                 /* 如有需要，可继续添加 */
                 /* ... ... ... */
-#line 3115 "xi.xi"
-#line 1923 "xi.xi"
                 wk_free_bus_connect("XITie *", xi_tie_box_free);
-#line 3116 "xi.xi"
                 WKTable *relations = xi_create_relations(xi_tree->root);
-#line 3182 "xi.xi"
                 if (tangle_opt) {
-#line 3129 "xi.xi"
-#line 3058 "xi.xi"
                         const char *opt_sep = ",";
                         WKArray *entrances = str_split(entrance_opt, opt_sep);
                         WKArray *outputs = str_split(output_opt, opt_sep);
@@ -2186,8 +1997,7 @@ int main(int argc, char **argv) {
                         if (entrances->n != outputs->n) {
                                 fprintf(stderr, "Illegal output!\n");
                                 exit(EXIT_FAILURE);
-                        }
-#line 3129 "xi.xi" /* 得到 entrances 与 outputs */
+                        } /* 得到 entrances 与 outputs */
                         WKList *indents = wk_list(WKStr *);
                         for (size_t i = 0; i < entrances->n; i++) {
                                 WKStr *entrance = wk_array_get(entrances, i, WKStr *);
@@ -2215,19 +2025,15 @@ int main(int argc, char **argv) {
                         }
                         wk_array_free(entrances);
                         wk_array_free(outputs);
-#line 3184 "xi.xi"
                 }
                 if (weave_opt) {
-#line 3162 "xi.xi"
                         FILE *xi_output = fopen(output_opt, "w");
                         spread_language_mark(xi_tree, relations);
                         if (yaml_opt) {
                                 xi_yaml_output(xi_tree, relations, xi_fmt, xi_output);
                         } else xi_weave(xi_tree, relations, xi_output);
                         fclose(xi_output);
-#line 3187 "xi.xi"
                 }
-#line 310 "xi.xi"
                 if (user_config) wk_table_free(user_config);
                 wk_str_free(xi_symbols->snippet_delimiter);
                 wk_str_free(xi_symbols->snippet_name_delimiter);
@@ -2241,17 +2047,13 @@ int main(int argc, char **argv) {
                 wk_str_free(xi_symbols->snippet_reference_start_mark);
                 wk_str_free(xi_symbols->snippet_reference_stop_mark);
                 free(xi_symbols);
-#line 340 "xi.xi"
                 fclose(xi_file);
-#line 415 "xi.xi"
                 for (size_t i = 0; i < xi_skipped_chars->n; i++) {
                         WKStr *s = wk_array_get(xi_skipped_chars, i, WKStr *);
                         wk_str_free(s);
                 }
                 wk_array_free(xi_skipped_chars);
-#line 1696 "xi.xi"
                 wk_array_free(xi_skipped_chars_in_name);
-#line 2246 "xi.xi"
                 wk_str_free(xi_fmt->snippet_start);
                 wk_str_free(xi_fmt->snippet_stop);
                 wk_str_free(xi_fmt->snippet_name_start);
@@ -2269,10 +2071,8 @@ int main(int argc, char **argv) {
                 wk_str_free(xi_fmt->snippet_appending_operator);
                 wk_str_free(xi_fmt->snippet_prepending_operator);
                 free(xi_fmt);
-#line 3122 "xi.xi"
                 wk_table_free(relations);
                 xi_delete_syntax_tree(xi_tree);
-#line 3189 "xi.xi"
         }
         return 0;
 }
