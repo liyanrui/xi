@@ -1747,12 +1747,10 @@ static void snippet_with_name_to_yaml(WKTree *syntax_tree,
                                                 yaml_output_multilines(output, z_tok->content->body, "        ");
                                                 fprintf(output, "'\n"
                                                                 "      ids:\n");
-                                                /* 输出所引用的片段 id */
-                                                for (size_t k = 0; k < tie->spatial_order->n; k++) {
-                                                        WKBranch *z_ref_bra = wk_array_get(tie->spatial_order, k, WKBranch *);
-                                                        XISyntax *z_ref = wk_branch_get(z_ref_bra, XISyntax *);
-                                                        fprintf(output, "        - %lu\n", z_ref->id);
-                                                }
+                                                /* 输出所引用的片段 id，同名片段只输出首个片段 id */
+                                                WKBranch *z_ref_bra = wk_array_get(tie->spatial_order, 0, WKBranch *);
+                                                XISyntax *z_ref = wk_branch_get(z_ref_bra, XISyntax *);
+                                                fprintf(output, "        - %lu\n", z_ref->id);
                                         } else {
                                                 fprintf(stderr, "Line %lu: the snippet <%s> not defined!\n",
                                                                 z_tok->line_number, z_tok->content->body);
