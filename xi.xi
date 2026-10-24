@@ -677,7 +677,8 @@ static WKPair *find_block(WKStr *content, WKStr *start_mark, WKStr *stop_mark) {
                                 p += (n - 1);
                                 block_stop = p + 1;
                                 state = SUCCESS;
-                        } else state = MAYBE_MARK;
+                        } else if (*p == '\n') state = FAILURE;
+                        else state = MAYBE_MARK;
                         break;
                 default: ;
                 }
@@ -772,15 +773,18 @@ while (1) {
 }
 @
 
-\subsection{标签引用与运算符}
+\subsection{标签与运算符}
 
-若有名片段首部存在标签引用，则必定存在运算符，且标签引用须在运算符之前。若有名片段首部不存在标签引用，依然有可能存在运算符。标签引用部分的析取，可基于 \type{extract_block} 和 \type{add_block} 函数实现。
+若有名片段首部存在标签开始和结束标记包含的文本，若其之后存在运算符，在语法分析阶段，该文本会被理解为标签引用，否则会被理解为标签。
 
-对于记号 \type{t} 及其所属记号节点 \type{it}，实现标签引用提取与记号构建过程如下：
+对于记号 \type{t} 及其所属记号节点 \type{it}，实现标签提取与记号构建过程如下：
 
-@ 标签引用提取与记号构建 #
+@ 标签提取与记号构建 #
+printf("|%s|\n", xi_symbols->tag_start_mark->body);
+printf("|%s|\n", xi_symbols->tag_stop_mark->body);
 WKStr *tag_reference = extract_block(t, xi_symbols->tag_start_mark, xi_symbols->tag_stop_mark);
 if (tag_reference) {
+        printf("|%s|\n", tag_reference->body);
         add_block(xi_tokens,
                   it,
                   tag_reference,
@@ -865,7 +869,7 @@ if (appending_mark) {
 
 假设 \type{xi_tokens} 的遍历指针为 \type{it}，则标签引用和运算符的析取过程的实现如下：
 
-@ 析取标签引用和运算符 #
+@ 析取标签和运算符 #
 it = xi_tokens->head;
 while (1) {
         if (!it) break;
@@ -876,48 +880,8 @@ while (1) {
                         XIToken *a = wk_link_get(prev, XIToken *);
                         if (a->type == XI_SNIPPET_NAME_DELIMITER
                             || a->type == XI_LANGUAGE_STOP_MARK) {
-                                # 标签引用提取与记号构建 @
+                                # 标签提取与记号构建 @
                                 # 片段追加运算符提取及记号构建 @
-                        }
-                }
-        }
-        it = it->next;
-}
-@
-
-\subsection{标签}
-
-在扫描过程的第四阶段，析取片段标签，过程与上一节中标签引用的析取过程相同。对记号列表 \type{xi_tokens} 中的节点 \type{it} 所包含的记号 \type{t} 中的标签提取及其记号构建过程如下：
-
-@ 标签提取及记号构建 #
-WKStr *tag_mark = extract_block(t, xi_symbols->tag_start_mark, xi_symbols->tag_stop_mark);
-if (tag_mark) {
-        add_block(xi_tokens,
-                  it,
-                  tag_mark,
-                  xi_symbols->tag_start_mark,
-                  XI_TAG_START_MARK,
-                  xi_symbols->tag_stop_mark,
-                  XI_TAG_STOP_MARK);
-}
-@
-
-假设 \type{xi_tokens} 的遍历指针为 \type{it}，则标签的解析过程如下：
-
-@ 析取标签 #
-it = xi_tokens->head;
-while (1) {
-        if (!it) break;
-        XIToken *t = wk_link_get(it, XIToken *);
-        if (t->type == XI_TEXT) {
-                WKLink *prev = it->prev;
-                if (prev) {
-                        XIToken *a = wk_link_get(prev, XIToken *);
-                        if (a->type == XI_SNIPPET_NAME_DELIMITER
-                            || a->type == XI_LANGUAGE_STOP_MARK
-                            || a->type == XI_SNIPPET_APPENDING_MARK
-                            || a->type == XI_SNIPPET_PREPENDING_MARK) {
-                                # 标签提取及记号构建 @
                         }
                 }
         }
@@ -1100,8 +1064,7 @@ static WKList *xi_lexer(FILE *xi_file) {
         # 分段 @
         # 析取片段名界限符 @
         # 析取语言标记 @
-        # 析取标签引用和运算符 @
-        # 析取标签 @
+        # 析取标签和运算符 @
         # 析取片段引用 @
         return xi_tokens;
 }
