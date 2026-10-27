@@ -780,11 +780,8 @@ while (1) {
 对于记号 \type{t} 及其所属记号节点 \type{it}，实现标签提取与记号构建过程如下：
 
 @ 标签提取与记号构建 #
-printf("|%s|\n", xi_symbols->tag_start_mark->body);
-printf("|%s|\n", xi_symbols->tag_stop_mark->body);
 WKStr *tag_reference = extract_block(t, xi_symbols->tag_start_mark, xi_symbols->tag_stop_mark);
 if (tag_reference) {
-        printf("|%s|\n", tag_reference->body);
         add_block(xi_tokens,
                   it,
                   tag_reference,
@@ -880,8 +877,13 @@ while (1) {
                         XIToken *a = wk_link_get(prev, XIToken *);
                         if (a->type == XI_SNIPPET_NAME_DELIMITER
                             || a->type == XI_LANGUAGE_STOP_MARK) {
-                                # 标签提取与记号构建 @
+                                do { /* 标签引用 */
+                                        # 标签提取与记号构建 @
+                                } while(0);
                                 # 片段追加运算符提取及记号构建 @
+                                do { /* 标签定义 */
+                                        # 标签提取与记号构建 @
+                                } while(0);
                         }
                 }
         }
@@ -1328,7 +1330,7 @@ if (x_op) {
 }
 @
 
-之后便是构造可能存在的标签节点：
+构造可能存在的标签节点：
 
 @ 有名片段的子节点集构造过程 # +
 x_tok = wk_link_get(it, XIToken *);
@@ -1953,13 +1955,16 @@ static void xi_tangle(const char *xi_file_path,
                 XISyntax *last = wk_branch_get(last_bra, XISyntax *);
                 here = last->id;
         }
+        size_t first_id = 0;
         for (size_t i = 0; i < tie->time_order->n; i++) {
                 WKBranch *x_bra = wk_array_get(tie->time_order, i, WKBranch *);
                 XISyntax *x = wk_branch_get(x_bra, XISyntax *);
-                WKBranch *y_bra = wk_array_get(x_bra->lower, x_bra->lower->n - 1, WKBranch *);
                 WKStr *current_indent = cascade_indents(indents); /* 将各层次的缩进串联起来 */
-                if (i > 0) {
-                        if (x->id > here) {
+                if (i == 0) first_id = x->id;
+                else {
+                        /* 如果首个同名片段位于 here 之后，则抽取所有同名片段的内容，
+                           否则截掉位于 here 之后的同名片段 */
+                        if (first_id < here && x->id > here) {
                                 wk_str_free(current_indent);
                                 continue; /* 同名片段，会被 here 截断 */
                         }
@@ -1967,6 +1972,7 @@ static void xi_tangle(const char *xi_file_path,
                         wk_str_suffix(cache, "\n");
                         wk_str_suffix(cache, current_indent->body);
                 }
+                WKBranch *y_bra = wk_array_get(x_bra->lower, x_bra->lower->n - 1, WKBranch *);
                 size_t last_pos = y_bra->lower->n - 1;
 		for (size_t j = 0; j < y_bra->lower->n; j++) {
 			WKBranch *z_bra = wk_array_get(y_bra->lower, j, WKBranch *);
